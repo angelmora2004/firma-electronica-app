@@ -18,6 +18,7 @@ import {
 import { styled } from '@mui/material/styles';
 import axios from '../config/axios';
 import { useAuth } from '../contexts/AuthContext';
+import FileUpload from './FileUpload';
 
 const DashboardBackgroundBox = styled(Box)(({ theme }) => ({
     minHeight: '100vh',
@@ -28,7 +29,7 @@ const DashboardBackgroundBox = styled(Box)(({ theme }) => ({
 
 const Dashboard = () => {
     const { user, logout } = useAuth();
-    const [activeTab, setActiveTab] = useState(0); // 0 para Firmar, 1 para Perfil
+    const [activeTab, setActiveTab] = useState(0); // 0 para Firmar, 1 para Subir Documento, 2 para Perfil
     const [passwordFormData, setPasswordFormData] = useState({
         currentPassword: '',
         newPassword: '',
@@ -103,12 +104,17 @@ const Dashboard = () => {
             case 0:
                 return (
                     <Box sx={{ p: 3 }}>
-                        <Typography variant="h5" gutterBottom>Sección Firmar</Typography>
-                        <Typography>Aquí irá la funcionalidad para firmar documentos.</Typography>
-                        {/* Contenido futuro para Firmar */}
+                        <Typography variant="h5" gutterBottom>Sección de Firmar de Ejemplo</Typography>
                     </Box>
                 );
             case 1:
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <Typography variant="h5" gutterBottom>Subir Documento para Firma</Typography>
+                        <FileUpload />
+                    </Box>
+                );
+            case 2:
                 return (
                     <Box sx={{ p: 3 }}>
                         <Typography variant="h5" gutterBottom>Perfil del Usuario</Typography>
@@ -238,6 +244,7 @@ const Dashboard = () => {
                     {/* Barra de Navegación (Tabs) */}
                     <Tabs value={activeTab} onChange={handleTabChange} aria-label="dashboard navigation">
                         <Tab label="Firmar" />
+                        <Tab label="Subir Documento" />
                         <Tab label="Perfil" />
                     </Tabs>
 
