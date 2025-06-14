@@ -61,6 +61,7 @@ cd frontend
 2. Crear archivo .env en el directorio actual con las siguientes variables:
 ```
 VITE_API_URL=http://tu_puerto/api
+VITE_PORT=5173
 ```
 
 3. Instalar dependencias:
