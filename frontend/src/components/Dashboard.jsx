@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -13,32 +13,192 @@ import {
     CircularProgress,
     Grid,
     Tabs,
-    Tab
+    Tab,
+    Card,
+    CardContent,
+    CardActions,
+    IconButton,
+    Chip,
+    Avatar,
+    Divider,
+    Alert,
+    AppBar,
+    Toolbar,
+    Drawer,
+    List,
+    ListItem,
+    ListItemIcon,
+    ListItemText,
+    Badge,
+    useMediaQuery
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { styled, useTheme } from '@mui/material/styles';
+import {
+    Dashboard as DashboardIcon,
+    Description,
+    Security,
+    Person,
+    Logout,
+    Menu,
+    Notifications,
+    Settings,
+    Upload,
+    Download,
+    VerifiedUser,
+    Warning,
+    CheckCircle,
+    Schedule,
+    Lock,
+    Visibility,
+    VisibilityOff,
+    Draw,
+    Article,
+    AccessTime,
+    SmartToy,
+    VpnKey,
+    Close,
+    AddCard
+} from '@mui/icons-material';
 import axios from '../config/axios';
 import { useAuth } from '../contexts/AuthContext';
 import FileUpload from './FileUpload';
+import AddSignature from './AddSignature';
 
-const DashboardBackgroundBox = styled(Box)(({ theme }) => ({
+const DashboardContainer = styled(Box)(({ theme }) => ({
     minHeight: '100vh',
-    minWidth: '100vw',
-    background: 'linear-gradient(135deg, #1976d2 0%, #64b5f6 100%)',
-    padding: theme.spacing(2, 0),
+    background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%)',
+    position: 'relative',
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'radial-gradient(circle at 20% 80%, rgba(0, 212, 170, 0.05) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255, 107, 53, 0.05) 0%, transparent 50%)',
+        pointerEvents: 'none',
+    }
+}));
+
+const StyledAppBar = styled(AppBar)(({ theme }) => ({
+    background: 'rgba(26, 26, 26, 0.95)',
+    backdropFilter: 'blur(20px)',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    boxShadow: 'none',
+}));
+
+const StyledDrawer = styled(Drawer)(({ theme }) => ({
+    '& .MuiDrawer-paper': {
+        background: 'rgba(26, 26, 26, 0.98)',
+        backdropFilter: 'blur(20px)',
+        borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+        width: 280,
+        color: '#ffffff',
+    }
+}));
+
+const StyledCard = styled(Card)(({ theme }) => ({
+    background: 'rgba(26, 26, 26, 0.8)',
+    backdropFilter: 'blur(10px)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    transition: 'all 0.3s ease',
+    '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.3)',
+        borderColor: 'rgba(0, 212, 170, 0.3)',
+    }
+}));
+
+const StyledTabs = styled(Tabs)(({ theme }) => ({
+    '& .MuiTabs-indicator': {
+        backgroundColor: theme.palette.primary.main,
+        height: 3,
+        borderRadius: 2,
+    },
+    '& .MuiTab-root': {
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontWeight: 600,
+        textTransform: 'none',
+        fontSize: '1rem',
+        '&.Mui-selected': {
+            color: theme.palette.primary.main,
+        },
+    }
+}));
+
+const ActionCard = styled(Card)(({ theme }) => ({
+    background: 'rgba(26, 26, 26, 0.8)',
+    backdropFilter: 'blur(10px)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    transition: 'all 0.3s ease',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing(3),
+    textAlign: 'center',
+    cursor: 'pointer',
+    '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.3)',
+        borderColor: 'rgba(0, 212, 170, 0.5)',
+    }
 }));
 
 const Dashboard = () => {
     const { user, logout } = useAuth();
-    const [activeTab, setActiveTab] = useState(0); // 0 para Firmar, 1 para Subir Documento, 2 para Perfil
+    const [activeTab, setActiveTab] = useState(0);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [currentTime, setCurrentTime] = useState(new Date());
+    const [signatures, setSignatures] = useState([]);
     const [passwordFormData, setPasswordFormData] = useState({
         currentPassword: '',
         newPassword: '',
         confirmNewPassword: ''
     });
+    const [showPasswords, setShowPasswords] = useState({
+        current: false,
+        new: false,
+        confirm: false
+    });
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [updateLoading, setUpdateLoading] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
-    const [updateMessage, setUpdateMessage] = useState({ text: '', type: '' }); // type: 'success' or 'error'
+    const [updateMessage, setUpdateMessage] = useState({ text: '', type: '' });
+    
+    // Estados para el modal de descarga
+    const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+    const [selectedSignature, setSelectedSignature] = useState(null);
+    const [downloadPassword, setDownloadPassword] = useState('');
+    const [showDownloadPassword, setShowDownloadPassword] = useState(false);
+    const [downloadLoading, setDownloadLoading] = useState(false);
+    const [downloadError, setDownloadError] = useState('');
+
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+    const fetchSignatures = async () => {
+        try {
+            const { data } = await axios.get('/signatures');
+            setSignatures(data);
+        } catch (error) {
+            console.error('Error fetching signatures:', error);
+            // Opcional: mostrar un mensaje de error al usuario
+        }
+    };
+
+    useEffect(() => {
+        const timerId = setInterval(() => setCurrentTime(new Date()), 60000);
+        
+        // Cargar las firmas cuando el componente se monta
+        fetchSignatures();
+
+        return () => clearInterval(timerId);
+    }, []);
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
@@ -48,6 +208,13 @@ const Dashboard = () => {
         setPasswordFormData({
             ...passwordFormData,
             [e.target.name]: e.target.value
+        });
+    };
+
+    const togglePasswordVisibility = (field) => {
+        setShowPasswords({
+            ...showPasswords,
+            [field]: !showPasswords[field]
         });
     };
 
@@ -62,13 +229,12 @@ const Dashboard = () => {
 
         setUpdateLoading(true);
         try {
-            // Asumiendo endpoint PUT /api/auth/profile para actualizar contraseña
             await axios.put('/auth/profile', {
                 currentPassword: passwordFormData.currentPassword,
                 newPassword: passwordFormData.newPassword
             });
             setUpdateMessage({ text: 'Contraseña actualizada con éxito', type: 'success' });
-            setPasswordFormData({ currentPassword: '', newPassword: '', confirmNewPassword: '' }); // Limpiar formulario
+            setPasswordFormData({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
         } catch (error) {
             console.error('Error al actualizar contraseña:', error);
             setUpdateMessage({ text: error.response?.data?.message || 'Error al actualizar contraseña', type: 'error' });
@@ -80,83 +246,161 @@ const Dashboard = () => {
     const handleDeleteAccount = async () => {
         setDeleteLoading(true);
         try {
-            // Asumiendo endpoint DELETE /api/auth/me para eliminar cuenta
             await axios.delete('/auth/me');
-            // Si la eliminación es exitosa, redirigir al login
-            logout(); // Limpiar contexto de autenticación
-            // La redirección se maneja en el interceptor de axios o aquí si logout incluye navigate
+            logout();
         } catch (error) {
             console.error('Error al eliminar cuenta:', error);
-            // Mostrar mensaje de error si la eliminación falla
             alert(error.response?.data?.message || 'Error al eliminar cuenta');
             setDeleteLoading(false);
             setDeleteConfirmOpen(false);
         }
     };
 
+    const handleDownloadSignature = (signature) => {
+        setSelectedSignature(signature);
+        setDownloadPassword('');
+        setDownloadError('');
+        setDownloadModalOpen(true);
+    };
+
+    const handleDownloadConfirm = async () => {
+        if (!downloadPassword.trim()) {
+            setDownloadError('Por favor ingresa la contraseña de la firma');
+            return;
+        }
+
+        setDownloadLoading(true);
+        setDownloadError('');
+
+        try {
+            // Primero validar la contraseña
+            await axios.post(`/signatures/${selectedSignature.id}/unlock`, {
+                password: downloadPassword
+            });
+
+            // Si la contraseña es correcta, descargar la firma
+            const response = await axios.get(`/signatures/${selectedSignature.id}/download`, {
+                responseType: 'blob',
+                params: { password: downloadPassword }
+            });
+
+            // Crear el enlace de descarga
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', selectedSignature.fileName);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+            // Cerrar el modal
+            setDownloadModalOpen(false);
+            setDownloadPassword('');
+            setSelectedSignature(null);
+
+        } catch (error) {
+            console.error('Error al descargar firma:', error);
+            if (error.response?.status === 401) {
+                setDownloadError('Contraseña incorrecta');
+            } else {
+                setDownloadError('Error al descargar la firma. Inténtalo de nuevo.');
+            }
+        } finally {
+            setDownloadLoading(false);
+        }
+    };
+
+    const handleDownloadCancel = () => {
+        setDownloadModalOpen(false);
+        setDownloadPassword('');
+        setDownloadError('');
+        setSelectedSignature(null);
+    };
+
     if (!user) {
-        // Esto no debería pasar si ProtectedRoute funciona, pero es buena práctica
-        return <CircularProgress />;
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+                <CircularProgress />
+            </Box>
+        );
     }
 
-    const renderContent = () => {
-        switch (activeTab) {
-            case 0:
-                return (
-                    <Box sx={{ p: 3 }}>
-                        <Typography variant="h5" gutterBottom>Sección de Firmar de Ejemplo</Typography>
-                    </Box>
-                );
-            case 1:
-                return (
-                    <Box sx={{ p: 3 }}>
-                        <Typography variant="h5" gutterBottom>Subir Documento para Firma</Typography>
-                        <FileUpload />
-                    </Box>
-                );
-            case 2:
-                return (
-                    <Box sx={{ p: 3 }}>
-                        <Typography variant="h5" gutterBottom>Perfil del Usuario</Typography>
+    const renderSettings = () => (
+        <>
+            {updateMessage.text && (
+                <Alert 
+                    severity={updateMessage.type} 
+                    sx={{ mb: 3 }}
+                    variant="filled"
+                >
+                    {updateMessage.text}
+                </Alert>
+            )}
 
-                        {updateMessage.text && (
-                            <Typography color={updateMessage.type === 'success' ? 'success.main' : 'error.main'} sx={{ mb: 2 }}>
-                                {updateMessage.text}
+            <Grid container spacing={3}>
+                <Grid item xs={12}>
+                    <StyledCard>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+                                Información de la Cuenta
                             </Typography>
-                        )}
-
-                        {/* Sección Información del Usuario */}
-                        <Paper elevation={2} sx={{ p: 3, mb: 4 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                <Typography variant="h6" gutterBottom component="div">Información de la Cuenta</Typography>
-                                <Button
-                                    variant="contained"
-                                    color="secondary"
-                                    onClick={logout}
-                                    size="small"
-                                >
-                                    Cerrar Sesión
-                                </Button>
+                            <Box sx={{ mb: 2 }}>
+                                <Typography variant="body2" color="text.secondary">Nombre</Typography>
+                                <Typography variant="body1">{user.nombre}</Typography>
                             </Box>
-                            <Typography variant="body1">Nombre: {user.nombre}</Typography>
-                            <Typography variant="body1">Correo Electrónico: {user.email}</Typography>
-                            {/* Puedes añadir más información si user la tiene (ej. rol) */}
-                            {/*user.rol && <Typography variant="body1">Rol: {user.rol}</Typography>*/}
-                        </Paper>
+                            <Box sx={{ mb: 2 }}>
+                                <Typography variant="body2" color="text.secondary">Correo Electrónico</Typography>
+                                <Typography variant="body1">{user.email}</Typography>
+                            </Box>
+                            <Box sx={{ mb: 3 }}>
+                                <Typography variant="body2" color="text.secondary">Estado de Verificación</Typography>
+                                <Chip 
+                                    icon={<VerifiedUser />} 
+                                    label="Verificado" 
+                                    color="success" 
+                                    size="small" 
+                                />
+                            </Box>
+                            <Button
+                                variant="outlined"
+                                color="secondary"
+                                onClick={logout}
+                                startIcon={<Logout />}
+                                fullWidth
+                            >
+                                Cerrar Sesión
+                            </Button>
+                        </CardContent>
+                    </StyledCard>
+                </Grid>
 
-                        {/* Sección Cambiar Contraseña */}
-                        <Paper elevation={2} sx={{ p: 3, mb: 4 }}>
-                            <Typography variant="h6" gutterBottom>Cambiar Contraseña</Typography>
-                            <Box component="form" onSubmit={handleUpdatePassword} sx={{ mt: 2 }}>
+                <Grid item xs={12}>
+                    <StyledCard>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+                                Cambiar Contraseña
+                            </Typography>
+                            <Box component="form" onSubmit={handleUpdatePassword}>
                                 <TextField
                                     margin="normal"
                                     required
                                     fullWidth
                                     name="currentPassword"
                                     label="Contraseña Actual"
-                                    type="password"
+                                    type={showPasswords.current ? 'text' : 'password'}
                                     value={passwordFormData.currentPassword}
                                     onChange={handlePasswordChange}
+                                    InputProps={{
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() => togglePasswordVisibility('current')}
+                                                edge="end"
+                                            >
+                                                {showPasswords.current ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }}
                                     sx={{ mb: 2 }}
                                 />
                                 <TextField
@@ -165,9 +409,19 @@ const Dashboard = () => {
                                     fullWidth
                                     name="newPassword"
                                     label="Nueva Contraseña"
-                                    type="password"
+                                    type={showPasswords.new ? 'text' : 'password'}
                                     value={passwordFormData.newPassword}
                                     onChange={handlePasswordChange}
+                                    InputProps={{
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() => togglePasswordVisibility('new')}
+                                                edge="end"
+                                            >
+                                                {showPasswords.new ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }}
                                     sx={{ mb: 2 }}
                                 />
                                 <TextField
@@ -176,56 +430,162 @@ const Dashboard = () => {
                                     fullWidth
                                     name="confirmNewPassword"
                                     label="Confirmar Nueva Contraseña"
-                                    type="password"
+                                    type={showPasswords.confirm ? 'text' : 'password'}
                                     value={passwordFormData.confirmNewPassword}
                                     onChange={handlePasswordChange}
-                                    sx={{ mb: 2 }}
+                                    InputProps={{
+                                        endAdornment: (
+                                            <IconButton
+                                                onClick={() => togglePasswordVisibility('confirm')}
+                                                edge="end"
+                                            >
+                                                {showPasswords.confirm ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        ),
+                                    }}
+                                    sx={{ mb: 3 }}
                                 />
                                 <Button
                                     type="submit"
                                     variant="contained"
                                     disabled={updateLoading}
-                                    sx={{ mt: 2 }}
+                                    startIcon={updateLoading ? <CircularProgress size={20} /> : <Lock />}
+                                    fullWidth
                                 >
-                                    {updateLoading ? <CircularProgress size={24} /> : 'Actualizar Contraseña'}
+                                    {updateLoading ? 'Actualizando...' : 'Actualizar Contraseña'}
                                 </Button>
                             </Box>
-                        </Paper>
+                        </CardContent>
+                    </StyledCard>
+                </Grid>
+            </Grid>
 
-                        {/* Sección Eliminar Cuenta */}
-                        <Paper elevation={2} sx={{ p: 3, mb: 4, borderColor: 'error.main', border: '1px solid' }}>
-                            <Typography variant="h6" gutterBottom>Eliminar Cuenta</Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                Esta acción es irreversible. Al eliminar tu cuenta, perderás todos tus datos.
-                            </Typography>
-                            <Button
-                                variant="outlined"
-                                color="error"
-                                onClick={() => setDeleteConfirmOpen(true)}
-                                disabled={deleteLoading}
-                            >
-                                {deleteLoading ? <CircularProgress size={24} /> : 'Eliminar Cuenta'}
-                            </Button>
-                        </Paper>
-
-                        {/* Modal de Confirmación de Eliminación */}
-                        <Dialog
-                            open={deleteConfirmOpen}
-                            onClose={() => setDeleteConfirmOpen(false)}
+            <Box sx={{ mt: 4 }}>
+                <StyledCard sx={{ borderColor: 'error.main' }}>
+                    <CardContent>
+                        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'error.main' }}>
+                            <Warning sx={{ mr: 1, verticalAlign: 'middle' }} />
+                            Eliminar Cuenta
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                            Esta acción es irreversible. Al eliminar tu cuenta, perderás todos tus datos y documentos firmados.
+                        </Typography>
+                        <Button
+                            variant="outlined"
+                            color="error"
+                            onClick={() => setDeleteConfirmOpen(true)}
+                            startIcon={<Warning />}
                         >
-                            <DialogTitle>Confirmar Eliminación</DialogTitle>
-                            <DialogContent>
-                                <Typography>¿Está seguro de que desea eliminar su cuenta? Esta acción no se puede deshacer.</Typography>
-                            </DialogContent>
-                            <DialogActions>
-                                <Button onClick={() => setDeleteConfirmOpen(false)} color="primary">
-                                    Cancelar
-                                </Button>
-                                <Button onClick={handleDeleteAccount} color="error" disabled={deleteLoading}>
-                                    {deleteLoading ? <CircularProgress size={24} /> : 'Eliminar'}
-                                </Button>
-                            </DialogActions>
-                        </Dialog>
+                            Eliminar Cuenta
+                        </Button>
+                    </CardContent>
+                </StyledCard>
+            </Box>
+        </>
+    );
+
+    const renderContent = () => {
+        switch (activeTab) {
+            case 0:
+                return (
+                    <Box sx={{ p: isMobile ? 1 : 3 }}>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                background: 'rgba(26, 26, 26, 0.7)',
+                                padding: 3,
+                                borderRadius: 4,
+                                mb: 4
+                            }}
+                        >
+                            <Box>
+                                <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                                    Bienvenido/a, {user.nombre}
+                                </Typography>
+                                <Typography variant="body1" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <AccessTime sx={{ mr: 1, fontSize: '1rem' }} />
+                                    {currentTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                </Typography>
+                            </Box>
+                            {!isMobile && <SmartToy sx={{ fontSize: 80, color: 'primary.main', opacity: 0.8 }} />}
+                        </Box>
+
+                        <Grid container spacing={3} mb={5}>
+                            <Grid item xs={6} md={3}>
+                                <ActionCard onClick={() => setActiveTab(1)}>
+                                    <Draw sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
+                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>Añadir mi firma (P12)</Typography>
+                                </ActionCard>
+                            </Grid>
+                            <Grid item xs={6} md={3}>
+                                <ActionCard onClick={() => setActiveTab(2)}>
+                                    <Article sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
+                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>Firmar Documentos</Typography>
+                                </ActionCard>
+                            </Grid>
+                            <Grid item xs={6} md={3}>
+                                <ActionCard>
+                                    <Notifications sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
+                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>Notificaciones</Typography>
+                                </ActionCard>
+                            </Grid>
+                        </Grid>
+                        
+                        <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+                            Mis Firmas
+                        </Typography>
+                        <StyledCard>
+                            <CardContent>
+                                <List>
+                                    {signatures.length > 0 ? (
+                                        signatures.map((sig, index) => (
+                                            <React.Fragment key={sig.id}>
+                                                <ListItem
+                                                    secondaryAction={
+                                                        <Button 
+                                                            variant="contained" 
+                                                            size="small"
+                                                            startIcon={<Download />}
+                                                            onClick={() => handleDownloadSignature(sig)}
+                                                        >
+                                                            Descargar
+                                                        </Button>
+                                                    }
+                                                >
+                                                    <ListItemIcon>
+                                                        <VpnKey color="primary" />
+                                                    </ListItemIcon>
+                                                    <ListItemText primary={sig.fileName} secondary={`Agregada: ${new Date(sig.createdAt).toLocaleDateString()}`} />
+                                                </ListItem>
+                                                {index < signatures.length - 1 && <Divider variant="inset" component="li" />}
+                                            </React.Fragment>
+                                        ))
+                                    ) : (
+                                        <Typography sx={{ textAlign: 'center', p: 2, color: 'text.secondary' }}>
+                                            No has añadido ninguna firma todavía.
+                                        </Typography>
+                                    )}
+                                </List>
+                            </CardContent>
+                        </StyledCard>
+                    </Box>
+                );
+            case 1:
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <AddSignature onSignatureAdded={fetchSignatures} />
+                    </Box>
+                );
+            case 2:
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 4 }}>
+                            Firmar Documento
+                        </Typography>
+                        <FileUpload />
                     </Box>
                 );
             default:
@@ -234,27 +594,196 @@ const Dashboard = () => {
     };
 
     return (
-        <DashboardBackgroundBox>
-            <Container maxWidth="lg">
-                <Paper elevation={3} sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                        <Typography variant="h4" component="h1">Firma Electrónica</Typography>
+        <DashboardContainer>
+            <StyledAppBar position="fixed">
+                <Toolbar>
+                    <IconButton
+                        edge="start"
+                        color="inherit"
+                        onClick={() => setDrawerOpen(true)}
+                        sx={{ mr: 2 }}
+                    >
+                        <Menu />
+                    </IconButton>
+                    
+                    <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>
+                        SecureSign
+                    </Typography>
+                    
+                    <Box display="flex" alignItems="center" gap={1}>
+                        <IconButton color="inherit">
+                            <Badge badgeContent={3} color="error">
+                                <Notifications />
+                            </Badge>
+                        </IconButton>
+                        <IconButton color="inherit" onClick={() => setSettingsOpen(true)}>
+                            <Avatar sx={{ bgcolor: 'primary.main' }}>
+                                {user.nombre?.charAt(0) || 'U'}
+                            </Avatar>
+                        </IconButton>
                     </Box>
+                </Toolbar>
+            </StyledAppBar>
 
-                    {/* Barra de Navegación (Tabs) */}
-                    <Tabs value={activeTab} onChange={handleTabChange} aria-label="dashboard navigation">
-                        <Tab label="Firmar" />
-                        <Tab label="Subir Documento" />
-                        <Tab label="Perfil" />
-                    </Tabs>
+            <StyledDrawer
+                anchor="left"
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+            >
+                <Box sx={{ p: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                        SecureSign
+                    </Typography>
+                </Box>
+                <List>
+                    <ListItem button onClick={() => { setActiveTab(0); setDrawerOpen(false); }}>
+                        <ListItemIcon>
+                            <DashboardIcon color="primary" />
+                        </ListItemIcon>
+                        <ListItemText primary="Panel de Control" />
+                    </ListItem>
+                    <ListItem button onClick={() => { setActiveTab(1); setDrawerOpen(false); }}>
+                        <ListItemIcon>
+                            <Draw color="primary" />
+                        </ListItemIcon>
+                        <ListItemText primary="Añadir mi Firma" />
+                    </ListItem>
+                    <ListItem button onClick={() => { setActiveTab(2); setDrawerOpen(false); }}>
+                        <ListItemIcon>
+                            <Article color="primary" />
+                        </ListItemIcon>
+                        <ListItemText primary="Firmar Documento" />
+                    </ListItem>
+                </List>
+            </StyledDrawer>
 
-                    {/* Área de Contenido de la Sección Activa */}
-                    <Box sx={{ mt: 3 }}>
-                        {renderContent()}
+            <Drawer
+                anchor="right"
+                open={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+            >
+                <Box sx={{ width: isMobile ? '100vw' : 400, p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                        <Typography variant="h5" sx={{ fontWeight: 700, ml: 2 }}>
+                            Configuración
+                        </Typography>
+                        <IconButton onClick={() => setSettingsOpen(false)}>
+                            <Close />
+                        </IconButton>
                     </Box>
-                </Paper>
-            </Container>
-        </DashboardBackgroundBox>
+                    <Divider sx={{ mb: 2 }} />
+                    <Box sx={{ p: 2, overflowY: 'auto', height: 'calc(100vh - 100px)' }}>
+                         {renderSettings()}
+                    </Box>
+                </Box>
+            </Drawer>
+
+            <Box sx={{ pt: 8, pb: 3 }}>
+                <Container maxWidth="xl">
+                    <Box sx={{ borderBottom: 1, borderColor: 'rgba(255, 255, 255, 0.1)', mb: 3 }}>
+                        <StyledTabs value={activeTab} onChange={handleTabChange}>
+                            <Tab label="Panel de Control" />
+                            <Tab label="Añadir mi Firma" />
+                            <Tab label="Firmar Documento" />
+                        </StyledTabs>
+                    </Box>
+                    
+                    {renderContent()}
+                </Container>
+            </Box>
+
+            <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+                <DialogTitle>Confirmar Eliminación</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        ¿Estás seguro de que quieres eliminar tu cuenta? Esta acción no se puede deshacer.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteConfirmOpen(false)}>
+                        Cancelar
+                    </Button>
+                    <Button 
+                        onClick={handleDeleteAccount} 
+                        color="error" 
+                        variant="contained"
+                        disabled={deleteLoading}
+                    >
+                        {deleteLoading ? <CircularProgress size={20} /> : 'Eliminar'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Modal para descargar firma */}
+            <Dialog 
+                open={downloadModalOpen} 
+                onClose={handleDownloadCancel}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Download color="primary" />
+                    Descargar Firma
+                </DialogTitle>
+                <DialogContent>
+                    {selectedSignature && (
+                        <Box sx={{ mb: 3 }}>
+                            <Typography variant="body1" sx={{ mb: 1 }}>
+                                <strong>Archivo:</strong> {selectedSignature.fileName}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Para descargar esta firma, ingresa la contraseña que usaste al subirla.
+                            </Typography>
+                        </Box>
+                    )}
+                    
+                    {downloadError && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {downloadError}
+                        </Alert>
+                    )}
+
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Contraseña de la firma"
+                        type={showDownloadPassword ? 'text' : 'password'}
+                        fullWidth
+                        variant="outlined"
+                        value={downloadPassword}
+                        onChange={(e) => setDownloadPassword(e.target.value)}
+                        InputProps={{
+                            endAdornment: (
+                                <IconButton
+                                    onClick={() => setShowDownloadPassword(!showDownloadPassword)}
+                                    edge="end"
+                                >
+                                    {showDownloadPassword ? <VisibilityOff /> : <Visibility />}
+                                </IconButton>
+                            ),
+                        }}
+                        onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                                handleDownloadConfirm();
+                            }
+                        }}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleDownloadCancel} disabled={downloadLoading}>
+                        Cancelar
+                    </Button>
+                    <Button 
+                        onClick={handleDownloadConfirm} 
+                        variant="contained"
+                        disabled={downloadLoading || !downloadPassword.trim()}
+                        startIcon={downloadLoading ? <CircularProgress size={20} /> : <Download />}
+                    >
+                        {downloadLoading ? 'Descargando...' : 'Descargar'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </DashboardContainer>
     );
 };
 

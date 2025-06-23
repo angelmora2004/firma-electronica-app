@@ -1,15 +1,27 @@
 const sequelize = require('./database');
 const User = require('../models/User');
+const Signature = require('../models/Signature');
 
-async function initializeDatabase() {
+User.hasMany(Signature, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+Signature.belongsTo(User, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+
+const initDb = async () => {
     try {
-        // Sincronizar modelos con la base de datos
-        await sequelize.sync({ force: true });
-        console.log('Base de datos sincronizada correctamente');
+        await sequelize.sync({ alter: true });
+        console.log('Base de datos sincronizada correctamente.');
     } catch (error) {
         console.error('Error al inicializar la base de datos:', error);
     }
-}
+};
 
-// Ejecutar la inicialización
-initializeDatabase(); 
+module.exports = initDb; 

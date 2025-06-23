@@ -33,7 +33,12 @@ export const AuthProvider = ({ children }) => {
         const responseInterceptor = axios.interceptors.response.use(
             (response) => response,
             (error) => {
-                if (error.response?.status === 401) {
+                // Condición para redirigir en 401
+                const shouldRedirect = 
+                    error.response?.status === 401 &&
+                    !error.config.url.includes('/signatures/');
+
+                if (shouldRedirect) {
                     setUser(null);
                     setToken(null);
                     window.location.href = '/login';

@@ -13,13 +13,10 @@ const storage = multer.diskStorage({
     }
 });
 
-// Filtro para aceptar solo PDFs
+// Filtro de archivo actualizado
 const fileFilter = (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
-        cb(null, true);
-    } else {
-        cb(new Error('Solo se permiten archivos PDF'), false);
-    }
+    // Permitir todos los tipos de archivo por ahora
+    cb(null, true);
 };
 
 // Configuración de multer
