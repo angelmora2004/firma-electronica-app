@@ -6,6 +6,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import UserCertificate from './components/UserCertificate';
 
 const theme = createTheme({
   palette: {

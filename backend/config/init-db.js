@@ -1,6 +1,7 @@
 const sequelize = require('./database');
 const User = require('../models/User');
 const Signature = require('../models/Signature');
+const CAKey = require('../models/CAKey');
 
 User.hasMany(Signature, {
     foreignKey: {

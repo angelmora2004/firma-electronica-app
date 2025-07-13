@@ -63,6 +63,8 @@ import axios from '../config/axios';
 import { useAuth } from '../contexts/AuthContext';
 import FileUpload from './FileUpload';
 import AddSignature from './AddSignature';
+import UserCertificate from './UserCertificate';
+import CustomModal from './CustomModal';
 
 const DashboardContainer = styled(Box)(({ theme }) => ({
     minHeight: '100vh',
@@ -177,6 +179,9 @@ const Dashboard = () => {
     const [showDownloadPassword, setShowDownloadPassword] = useState(false);
     const [downloadLoading, setDownloadLoading] = useState(false);
     const [downloadError, setDownloadError] = useState('');
+
+    // Estados para el modal de certificado digital
+    const [certModalOpen, setCertModalOpen] = useState(false);
 
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -532,6 +537,12 @@ const Dashboard = () => {
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>Notificaciones</Typography>
                                 </ActionCard>
                             </Grid>
+                            <Grid item xs={6} md={3}>
+                                <ActionCard onClick={() => setCertModalOpen(true)}>
+                                    <VerifiedUser sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
+                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>Solicitar Certificado Digital</Typography>
+                                </ActionCard>
+                            </Grid>
                         </Grid>
                         
                         <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
@@ -783,6 +794,11 @@ const Dashboard = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Modal para solicitar certificado digital */}
+            <CustomModal open={certModalOpen} onClose={() => setCertModalOpen(false)} title="Solicitar Certificado Digital">
+                <UserCertificate />
+            </CustomModal>
         </DashboardContainer>
     );
 };

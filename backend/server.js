@@ -24,11 +24,13 @@ app.use(express.urlencoded({ extended: true }));
 const fileRoutes = require('./routes/fileRoutes');
 const usersRoutes = require('./routes/users');
 const signatureRoutes = require('./routes/signatureRoutes');
+const caRoutes = require('./routes/caRoutes');
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/files', fileRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/signatures', signatureRoutes);
+app.use('/api/ca', caRoutes);
 
 // Servir archivos estáticos desde la carpeta uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

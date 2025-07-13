@@ -1,0 +1,94 @@
+.user-cert-container {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  max-width: 420px;
+  margin: 32px auto;
+  padding: 32px 24px 24px 24px;
+  font-family: inherit;
+}
+.user-cert-container h2 {
+  color: #2d3748;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.user-cert-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.user-cert-form input {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 1rem;
+  background: #f8fafc;
+  transition: border 0.2s;
+}
+.user-cert-form input:focus {
+  border: 1.5px solid #3182ce;
+  outline: none;
+}
+.user-cert-form button,
+.user-cert-btn {
+  margin-top: 10px;
+  padding: 10px 0;
+  background: #3182ce;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.user-cert-form button:disabled,
+.user-cert-btn:disabled {
+  background: #90cdf4;
+  cursor: not-allowed;
+}
+.user-cert-message {
+  margin: 18px 0 0 0;
+  color: #e53e3e;
+  text-align: center;
+  font-weight: 500;
+}
+.user-cert-success {
+  margin-top: 18px;
+  background: #e6fffa;
+  border: 1px solid #b2f5ea;
+  border-radius: 8px;
+  padding: 16px;
+  color: #234e52;
+  text-align: center;
+}
+.user-cert-success button {
+  margin: 8px 6px 0 6px;
+  background: #38b2ac;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 8px 16px;
+  font-size: 0.98rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.user-cert-success button:hover {
+  background: #319795;
+}
+.user-cert-instructions {
+  background: #f8fafc;
+  border-left: 4px solid #3182ce;
+  border-radius: 7px;
+  padding: 16px 18px 10px 18px;
+  margin-bottom: 18px;
+  color: #234e52;
+  font-size: 0.98rem;
+}
+.user-cert-instructions ul {
+  margin: 8px 0 8px 18px;
+  padding-left: 0;
+}
+.user-cert-instructions li {
+  margin-bottom: 4px;
+} 
