@@ -10,9 +10,45 @@ exports.uploadSignature = async (req, res) => {
         return res.status(400).json({ message: 'Password for the signature file is required.' });
     }
 
+    const path = require('path');
+    const { spawn } = require('child_process');
+    const fsSync = require('fs');
+    const caCertPath = path.join(__dirname, '../uploads/ca/ca.pem');
+    const tempCertPath = req.file.path + '.crt';
+    let verificationFailed = false;
+    let verificationErrorMsg = '';
+
     try {
+        // 1. Extraer el certificado del .p12
+        await new Promise((resolve, reject) => {
+            const extract = spawn('openssl', [
+                'pkcs12', '-in', req.file.path, '-clcerts', '-nokeys', '-out', tempCertPath, '-passin', `pass:${req.body.password}`
+            ]);
+            let error = '';
+            extract.stderr.on('data', (data) => { error += data.toString(); });
+            extract.on('close', (code) => {
+                if (code === 0 && fsSync.existsSync(tempCertPath)) resolve();
+                else reject(new Error('No se pudo extraer el certificado del archivo .p12. ' + error));
+            });
+        });
+
+        // 2. Verificar el certificado extraído contra la CA
+        await new Promise((resolve, reject) => {
+            const verify = spawn('openssl', [
+                'verify', '-CAfile', caCertPath, tempCertPath
+            ]);
+            let output = '';
+            let error = '';
+            verify.stdout.on('data', (data) => { output += data.toString(); });
+            verify.stderr.on('data', (data) => { error += data.toString(); });
+            verify.on('close', (code) => {
+                if (code === 0 && output.includes(': OK')) resolve();
+                else reject(new Error('El archivo .p12 no fue emitido por la Autoridad Certificadora registrada. ' + error + output));
+            });
+        });
+
+        // Si pasa la validación, continuar con el flujo normal
         const fileBuffer = await fs.readFile(req.file.path);
-        
         const { encryptedData, iv, salt, authTag } = await encrypt(fileBuffer, req.body.password);
 
         await Signature.create({
@@ -24,22 +60,22 @@ exports.uploadSignature = async (req, res) => {
             userId: req.user.id
         });
 
-        // Eliminar el archivo original después de cifrarlo y guardarlo
+        // Eliminar el archivo original y el temporal después de cifrarlo y guardarlo
         await fs.unlink(req.file.path);
+        if (fsSync.existsSync(tempCertPath)) await fs.unlink(tempCertPath);
 
         res.status(201).json({ message: 'Signature uploaded and encrypted successfully.' });
 
     } catch (error) {
-        console.error('Error uploading signature:', error);
-        // Asegurarse de que el archivo se elimine si hay un error
+        // Eliminar archivos temporales si hay error
         if (req.file && req.file.path) {
-            try {
-                await fs.unlink(req.file.path);
-            } catch (unlinkError) {
-                console.error('Error deleting file after failed upload:', unlinkError);
-            }
+            try { await fs.unlink(req.file.path); } catch {}
         }
-        res.status(500).json({ message: 'Server error while uploading signature.' });
+        if (fsSync.existsSync(tempCertPath)) {
+            try { await fs.unlink(tempCertPath); } catch {}
+        }
+        // Unificar mensaje de error para cualquier fallo de validación/extracción
+        return res.status(400).json({ message: 'El archivo .p12 no fue emitido por la Autoridad Certificadora registrada.' });
     }
 };
 
