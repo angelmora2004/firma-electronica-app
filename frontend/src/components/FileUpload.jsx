@@ -44,6 +44,8 @@ import {
 } from '@mui/icons-material';
 import CustomModal from './CustomModal';
 import NativePDFViewer from './NativePDFViewer';
+import { PDFDocument } from 'pdf-lib';
+import QRCode from 'qrcode';
 
 const UploadArea = styled(Paper)(({ theme, $isDragOver }) => ({
     border: `2px dashed ${$isDragOver ? theme.palette.primary.main : 'rgba(255, 255, 255, 0.2)'}`,
@@ -128,6 +130,9 @@ const FileUpload = () => {
     const [showStampPreview, setShowStampPreview] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
 
+    // Nuevo estado para los datos del certificado
+    const [certInfo, setCertInfo] = useState(null);
+
     const { token, user } = useAuth();
 
     // Verificar si el usuario está autenticado
@@ -201,6 +206,9 @@ const FileUpload = () => {
         setUnlockError('');
         try {
             await axios.post(`/signatures/${selectedSignature}/unlock`, { password: signaturePassword });
+            // Obtener los datos del certificado para la estampa
+            const { data } = await axios.post(`/signatures/${selectedSignature}/cert-info`, { password: signaturePassword });
+            setCertInfo(data);
             setIsUnlocked(true);
             setShowStampPreview(true); // Mostrar estampa solo después de desbloquear
         } catch (err) {
@@ -213,47 +221,108 @@ const FileUpload = () => {
         }
     };
 
+    // Genera la imagen de la estampa (canvas a PNG)
+    async function generateStampImage({ qrData, firmante, organizacion, fecha }) {
+      const qrDataUrl = await QRCode.toDataURL(qrData, { width: 100, margin: 1 });
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 120;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const qrImg = new window.Image();
+      qrImg.src = qrDataUrl;
+      await new Promise(resolve => { qrImg.onload = resolve; });
+      ctx.drawImage(qrImg, 10, 10, 100, 100);
+      ctx.font = 'bold 20px Arial';
+      ctx.fillStyle = '#000';
+      ctx.fillText('FIRMA DIGITAL', 120, 35);
+      ctx.font = '16px Arial';
+      ctx.fillText(`Firmado por: ${firmante}`, 120, 60);
+      ctx.fillText(`Organización: ${organizacion}`, 120, 85);
+      ctx.fillText(`Fecha firmado: ${fecha}`, 120, 110);
+      const dataUrl = canvas.toDataURL('image/png');
+      const res = await fetch(dataUrl);
+      return new Uint8Array(await res.arrayBuffer());
+    }
+
+    // Inserta la estampa en el PDF con escalado proporcional
+    async function addStampToPDF({ pdfBuffer, stampImage, x, y, page = 0, canvasWidth, canvasHeight }) {
+      const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+      const pngImage = await pdfDoc.embedPng(stampImage);
+      const pages = pdfDoc.getPages();
+      const targetPage = pages[page];
+      // Tamaño real de la página PDF
+      const pdfWidth = targetPage.getWidth();
+      const pdfHeight = targetPage.getHeight();
+      // Escala las coordenadas del canvas a las del PDF
+      const scaledX = (x / canvasWidth) * pdfWidth;
+      const scaledY = (y / canvasHeight) * pdfHeight;
+      const stampWidth = 250;
+      const stampHeight = 80;
+      targetPage.drawImage(pngImage, {
+        x: scaledX,
+        y: pdfHeight - scaledY - stampHeight,
+        width: stampWidth,
+        height: stampHeight,
+      });
+      return await pdfDoc.save();
+    }
+
     const handleSignDocument = async () => {
         if (!isUnlocked || !documentId) {
             setError('Por favor, desbloquea una firma primero.');
             return;
         }
-
         setSigningLoading(true);
         setError('');
         setSigningProgress('Iniciando proceso de firma...');
-
         try {
-            setSigningProgress('Procesando documento y generando estampa QR...');
-            
-            // Obtener las dimensiones reales del canvas del PDF
-            const canvas = document.querySelector('canvas');
-            const containerDimensions = canvas ? {
-                width: canvas.width,
-                height: canvas.height
-            } : {
-                width: 800,
-                height: 600
-            };
-
-            console.log('Dimensiones del canvas enviadas:', containerDimensions);
-            console.log('Posición de la estampa:', stampPosition);
-
-            // Usar la página actual del estado
-            const pageToUse = currentPage;
-
-            const response = await axios.post('/signatures/sign-document', {
-                signatureId: selectedSignature,
-                password: signaturePassword,
-                documentId: documentId,
-                documentPosition: stampPosition,
-                containerDimensions: containerDimensions,
-                pageNumber: pageToUse
-            }, {
-                responseType: 'blob'
+            setSigningProgress('Generando estampa visual...');
+            // 1. Obtener el buffer del PDF original
+            const pdfBuffer = await file.arrayBuffer();
+            // 2. Generar los datos para el QR y la estampa
+            const qrData = JSON.stringify({
+              firmante: certInfo?.commonName || user.nombre,
+              organizacion: certInfo?.organization || 'Sin organización',
+              fecha: new Date().toLocaleDateString('es-ES')
             });
-
-            // Crear y descargar el archivo firmado
+            const stampImage = await generateStampImage({
+              qrData,
+              firmante: certInfo?.commonName || user.nombre,
+              organizacion: certInfo?.organization || 'Sin organización',
+              fecha: new Date().toLocaleDateString('es-ES')
+            });
+            // 3. Obtener dimensiones del canvas
+            const canvas = document.querySelector('canvas');
+            const canvasWidth = canvas ? canvas.width : 800;
+            const canvasHeight = canvas ? canvas.height : 600;
+            // 4. Insertar la estampa en el PDF con escalado
+            const stampedPdfBytes = await addStampToPDF({
+              pdfBuffer,
+              stampImage,
+              x: stampPosition.x,
+              y: stampPosition.y,
+              page: currentPage - 1,
+              canvasWidth,
+              canvasHeight
+            });
+            setSigningProgress('Enviando PDF con estampa al backend para firma digital...');
+            // 5. Enviar el PDF modificado al backend para firmar
+            const formData = new FormData();
+            formData.append('pdf', new Blob([stampedPdfBytes], { type: 'application/pdf' }), 'documento_con_estampa.pdf');
+            formData.append('signatureId', selectedSignature);
+            formData.append('password', signaturePassword);
+            formData.append('documentId', documentId);
+            // Si el backend espera posición/página para registro, puedes agregarlo:
+            formData.append('x', stampPosition.x);
+            formData.append('y', stampPosition.y);
+            formData.append('pageNumber', currentPage);
+            const response = await axios.post('/signatures/sign-document', formData, {
+              responseType: 'blob',
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            // Descargar el archivo firmado
             const blob = new Blob([response.data], { type: 'application/pdf' });
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -263,11 +332,8 @@ const FileUpload = () => {
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-
             setSigningProgress('Descargando documento...');
-            setSuccess('Documento procesado exitosamente. Se agregó estampa QR con información del certificado digital.');
-            
-            // Limpiar el estado
+            setSuccess('Documento firmado exitosamente.');
             setFile(null);
             setFileUrl('');
             setDocumentId('');
@@ -276,7 +342,7 @@ const FileUpload = () => {
             setSelectedSignature('');
             setSignaturePassword('');
             setStampPosition({ x: 0, y: 0 });
-
+            setCertInfo(null);
         } catch (err) {
             console.error('Error firmando documento:', err);
             setError(err.response?.data?.message || 'Error al firmar el documento.');
@@ -303,6 +369,7 @@ const FileUpload = () => {
         setSelectedSignature('');
         setSignaturePassword('');
         setCurrentPage(1);
+        setCertInfo(null);
     };
 
     return (

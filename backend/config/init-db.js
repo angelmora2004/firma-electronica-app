@@ -2,6 +2,7 @@ const sequelize = require('./database');
 const User = require('../models/User');
 const Signature = require('../models/Signature');
 const CAKey = require('../models/CAKey');
+const SignedDocument = require('../models/SignedDocument');
 
 User.hasMany(Signature, {
     foreignKey: {
@@ -10,6 +11,19 @@ User.hasMany(Signature, {
     }
 });
 Signature.belongsTo(User, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+// Relación para documentos firmados
+User.hasMany(SignedDocument, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+SignedDocument.belongsTo(User, {
     foreignKey: {
         name: 'userId',
         allowNull: false

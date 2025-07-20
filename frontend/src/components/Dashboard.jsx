@@ -65,6 +65,7 @@ import FileUpload from './FileUpload';
 import AddSignature from './AddSignature';
 import UserCertificate from './UserCertificate';
 import CustomModal from './CustomModal';
+import SignedDocuments from './SignedDocuments';
 
 const DashboardContainer = styled(Box)(({ theme }) => ({
     minHeight: '100vh',
@@ -532,6 +533,12 @@ const Dashboard = () => {
                                 </ActionCard>
                             </Grid>
                             <Grid item xs={6} md={3}>
+                                <ActionCard onClick={() => setActiveTab(3)}>
+                                    <Article sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
+                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>Documentos Firmados</Typography>
+                                </ActionCard>
+                            </Grid>
+                            <Grid item xs={6} md={3}>
                                 <ActionCard>
                                     <Notifications sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>Notificaciones</Typography>
@@ -597,6 +604,12 @@ const Dashboard = () => {
                             Firmar Documento
                         </Typography>
                         <FileUpload />
+                    </Box>
+                );
+            case 3:
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <SignedDocuments />
                     </Box>
                 );
             default:
@@ -665,6 +678,12 @@ const Dashboard = () => {
                         </ListItemIcon>
                         <ListItemText primary="Firmar Documento" />
                     </ListItem>
+                    <ListItem button onClick={() => { setActiveTab(3); setDrawerOpen(false); }}>
+                        <ListItemIcon>
+                            <Article color="primary" />
+                        </ListItemIcon>
+                        <ListItemText primary="Documentos Firmados" />
+                    </ListItem>
                 </List>
             </StyledDrawer>
 
@@ -696,6 +715,7 @@ const Dashboard = () => {
                             <Tab label="Panel de Control" />
                             <Tab label="Añadir mi Firma" />
                             <Tab label="Firmar Documento" />
+                            <Tab label="Documentos Firmados" />
                         </StyledTabs>
                     </Box>
                     

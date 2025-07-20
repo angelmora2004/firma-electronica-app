@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { uploadSignature, getSignatures, unlockSignature, downloadSignature, signDocument } = require('../controllers/signatureController');
+const { uploadSignature, getSignatures, unlockSignature, downloadSignature, signDocument, getCertInfo } = require('../controllers/signatureController');
+const { getSignedDocuments, downloadSignedDocument, deleteSignedDocument } = require('../controllers/signedDocumentController');
 const authMiddleware = require('../middleware/authMiddleware');
 const signatureUpload = require('../middleware/signatureUpload');
 
@@ -49,5 +50,19 @@ router.post(
     authMiddleware,
     signDocument
 );
+
+// @route   POST api/signatures/:id/cert-info
+// @desc    Obtener datos del certificado de una firma
+// @access  Private
+router.post(
+    '/:id/cert-info',
+    authMiddleware,
+    getCertInfo
+);
+
+// Rutas para documentos firmados
+router.get('/signed-documents', authMiddleware, getSignedDocuments);
+router.get('/signed-documents/:id/download', authMiddleware, downloadSignedDocument);
+router.delete('/signed-documents/:id', authMiddleware, deleteSignedDocument);
 
 module.exports = router; 
