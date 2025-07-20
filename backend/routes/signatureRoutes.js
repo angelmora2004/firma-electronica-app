@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { uploadSignature, getSignatures, unlockSignature, downloadSignature } = require('../controllers/signatureController');
+const { uploadSignature, getSignatures, unlockSignature, downloadSignature, signDocument } = require('../controllers/signatureController');
 const authMiddleware = require('../middleware/authMiddleware');
 const signatureUpload = require('../middleware/signatureUpload');
 
@@ -39,6 +39,15 @@ router.get(
     '/:id/download',
     authMiddleware,
     downloadSignature
+);
+
+// @route   POST api/signatures/sign-document
+// @desc    Sign a PDF document with digital signature and QR stamp
+// @access  Private
+router.post(
+    '/sign-document',
+    authMiddleware,
+    signDocument
 );
 
 module.exports = router; 

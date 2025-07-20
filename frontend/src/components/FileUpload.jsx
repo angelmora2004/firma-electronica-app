@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from '../config/axios';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -18,7 +18,12 @@ import {
     Select,
     MenuItem,
     FormControl,
-    InputLabel
+    InputLabel,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Snackbar
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
@@ -30,9 +35,15 @@ import {
     Security,
     VerifiedUser,
     Lock,
-    LockOpen
+    LockOpen,
+    QrCode,
+    QrCode2 as QrCode2Icon,
+    Download,
+    Close,
+    Info
 } from '@mui/icons-material';
 import CustomModal from './CustomModal';
+import NativePDFViewer from './NativePDFViewer';
 
 const UploadArea = styled(Paper)(({ theme, $isDragOver }) => ({
     border: `2px dashed ${$isDragOver ? theme.palette.primary.main : 'rgba(255, 255, 255, 0.2)'}`,
@@ -89,6 +100,8 @@ const StyledButton = styled(Button)(({ theme }) => ({
     }
 }));
 
+
+
 const FileUpload = () => {
     const [file, setFile] = useState(null);
     const [fileUrl, setFileUrl] = useState('');
@@ -107,37 +120,76 @@ const FileUpload = () => {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalInfo, setModalInfo] = useState({ title: '', message: '' });
 
-    const { token } = useAuth();
+    // Nuevos estados para la funcionalidad de firma
+    const [documentId, setDocumentId] = useState('');
+    const [stampPosition, setStampPosition] = useState({ x: 0, y: 0 });
+    const [signingLoading, setSigningLoading] = useState(false);
+    const [signingProgress, setSigningProgress] = useState('');
+    const [showStampPreview, setShowStampPreview] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const { token, user } = useAuth();
+
+    // Verificar si el usuario está autenticado
+    useEffect(() => {
+        if (!token) {
+            window.location.href = '/login';
+        }
+    }, [token]);
+
+
 
     useEffect(() => {
         const fetchSignatures = async () => {
             try {
-                const { data } = await axios.get('/signatures');
-                setSignatures(data);
+                // Solo intentar cargar firmas si hay un token
+                if (token) {
+                    const { data } = await axios.get('/signatures');
+                    setSignatures(data);
+                }
             } catch (err) {
                 console.error('Error fetching signatures:', err);
+                // Si hay error 401, redirigir al login
+                if (err.response?.status === 401) {
+                    window.location.href = '/login';
+                }
             }
         };
         fetchSignatures();
-    }, []);
+    }, [token]);
     
-    const handleFile = (selectedFile) => {
+    const handleFile = async (selectedFile) => {
         if (selectedFile) {
-            setFile(selectedFile);
-            setFileUrl(URL.createObjectURL(selectedFile));
+            if (selectedFile.type !== 'application/pdf') {
+                setError('Solo se permiten archivos PDF.');
+                return;
+            }
+
+            setUploading(true);
             setError('');
             setSuccess('');
-            setIsUnlocked(false);
-            setUnlockError('');
-            setSelectedSignature('');
-            setSignaturePassword('');
-        }
-    };
 
-    const handleSubmit = async (e) => {
-        // La lógica de firma se implementará aquí en el futuro
-        e.preventDefault();
-        alert('Funcionalidad de firma en desarrollo.');
+            try {
+                // Subir el archivo al servidor
+                const formData = new FormData();
+                formData.append('document', selectedFile);
+
+                const response = await axios.post('/files/upload-for-signing', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
+
+                setDocumentId(response.data.documentId);
+                setFile(selectedFile);
+                setFileUrl(URL.createObjectURL(selectedFile));
+                setSuccess('Documento subido correctamente. Ahora selecciona y desbloquea una firma para continuar.');
+            } catch (err) {
+                setError(err.response?.data?.message || 'Error al subir el documento.');
+            } finally {
+                setUploading(false);
+            }
+        }
     };
 
     const handleUnlockSignature = async () => {
@@ -150,6 +202,7 @@ const FileUpload = () => {
         try {
             await axios.post(`/signatures/${selectedSignature}/unlock`, { password: signaturePassword });
             setIsUnlocked(true);
+            setShowStampPreview(true); // Mostrar estampa solo después de desbloquear
         } catch (err) {
             const errorMessage = err.response?.data?.message || 'Ocurrió un error inesperado al intentar desbloquear la firma.';
             setModalInfo({ title: 'Error de Desbloqueo', message: errorMessage });
@@ -160,9 +213,96 @@ const FileUpload = () => {
         }
     };
 
+    const handleSignDocument = async () => {
+        if (!isUnlocked || !documentId) {
+            setError('Por favor, desbloquea una firma primero.');
+            return;
+        }
+
+        setSigningLoading(true);
+        setError('');
+        setSigningProgress('Iniciando proceso de firma...');
+
+        try {
+            setSigningProgress('Procesando documento y generando estampa QR...');
+            
+            // Obtener las dimensiones reales del canvas del PDF
+            const canvas = document.querySelector('canvas');
+            const containerDimensions = canvas ? {
+                width: canvas.width,
+                height: canvas.height
+            } : {
+                width: 800,
+                height: 600
+            };
+
+            console.log('Dimensiones del canvas enviadas:', containerDimensions);
+            console.log('Posición de la estampa:', stampPosition);
+
+            // Usar la página actual del estado
+            const pageToUse = currentPage;
+
+            const response = await axios.post('/signatures/sign-document', {
+                signatureId: selectedSignature,
+                password: signaturePassword,
+                documentId: documentId,
+                documentPosition: stampPosition,
+                containerDimensions: containerDimensions,
+                pageNumber: pageToUse
+            }, {
+                responseType: 'blob'
+            });
+
+            // Crear y descargar el archivo firmado
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `documento_firmado_${Date.now()}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            setSigningProgress('Descargando documento...');
+            setSuccess('Documento procesado exitosamente. Se agregó estampa QR con información del certificado digital.');
+            
+            // Limpiar el estado
+            setFile(null);
+            setFileUrl('');
+            setDocumentId('');
+            setShowStampPreview(false);
+            setIsUnlocked(false);
+            setSelectedSignature('');
+            setSignaturePassword('');
+            setStampPosition({ x: 0, y: 0 });
+
+        } catch (err) {
+            console.error('Error firmando documento:', err);
+            setError(err.response?.data?.message || 'Error al firmar el documento.');
+        } finally {
+            setSigningLoading(false);
+            setSigningProgress('');
+        }
+    };
+
+
+
+
+
+
+
     const removeFile = () => {
         setFile(null);
         setFileUrl('');
+        setDocumentId('');
+        setShowStampPreview(false);
+        setStampPosition({ x: 0, y: 0 });
+        setIsUnlocked(false);
+        setUnlockError('');
+        setSelectedSignature('');
+        setSignaturePassword('');
+        setCurrentPage(1);
     };
 
     return (
@@ -174,13 +314,30 @@ const FileUpload = () => {
                 message={modalInfo.message}
                 type="error"
             />
+            
+            <Snackbar
+                open={!!success}
+                autoHideDuration={6000}
+                onClose={() => setSuccess('')}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            >
+                <Alert onClose={() => setSuccess('')} severity="success" sx={{ width: '100%' }}>
+                    {success}
+                </Alert>
+            </Snackbar>
+
             {!file ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                    <UploadArea $isDragOver={isDragOver} onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }} onDragLeave={() => setIsDragOver(false)} onDrop={(e) => { e.preventDefault(); setIsDragOver(false); handleFile(e.dataTransfer.files[0]); }} onClick={() => document.getElementById('docInput').click()}>
+                    <UploadArea $isDragOver={isDragOver} 
+                        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }} 
+                        onDragLeave={() => setIsDragOver(false)} 
+                        onDrop={(e) => { e.preventDefault(); setIsDragOver(false); handleFile(e.dataTransfer.files[0]); }} 
+                        onClick={() => document.getElementById('docInput').click()}
+                    >
                         <CloudUpload sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                        <Typography variant="h5" sx={{ fontWeight: 600 }}>Arrastra y suelta tu documento aquí</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 600 }}>Arrastra y suelta tu documento PDF aquí</Typography>
                         <Typography color="text.secondary">o haz clic para seleccionar</Typography>
-                        <Input type="file" id="docInput" onChange={(e) => handleFile(e.target.files[0])} sx={{ display: 'none' }} />
+                        <Input type="file" id="docInput" onChange={(e) => handleFile(e.target.files[0])} sx={{ display: 'none' }} accept=".pdf" />
                     </UploadArea>
                 </Box>
             ) : (
@@ -188,16 +345,15 @@ const FileUpload = () => {
                     
                     {/* Columna del Visor */}
                     <Box sx={{ width: { xs: '100%', md: '65%' } }}>
-                        <Paper sx={{ height: '80vh', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: 2 }}>
-                            {file.type === 'application/pdf' ? (
-                                <iframe src={fileUrl} width="100%" height="100%" title="preview" style={{ border: 'none' }} />
-                            ) : (
-                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                                    <Description sx={{ fontSize: 100 }} />
-                                    <Typography variant="h5" sx={{ mt: 2 }}>{file.name}</Typography>
-                                    <Typography color="text.secondary">No se puede previsualizar este tipo de archivo.</Typography>
-                                </Box>
-                            )}
+                        <Paper sx={{ height: '80vh', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: 2, position: 'relative' }}>
+                            <NativePDFViewer
+                                fileUrl={fileUrl}
+                                onPageChange={setCurrentPage}
+                                currentPage={currentPage}
+                                stampPosition={stampPosition}
+                                showStampPreview={showStampPreview}
+                                onStampPositionChange={setStampPosition}
+                            />
                         </Paper>
                         <Button onClick={removeFile} color="error" sx={{ mt: 2 }}>Quitar archivo</Button>
                     </Box>
@@ -207,9 +363,19 @@ const FileUpload = () => {
                         <Paper sx={{ p: 3, borderRadius: 2 }}>
                             <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>Opciones de Firma</Typography>
                             
+                            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                            
                             <FormControl fullWidth sx={{ mb: 2 }}>
                                 <InputLabel>Seleccionar Firma a Usar</InputLabel>
-                                <Select value={selectedSignature} label="Seleccionar Firma a Usar" onChange={(e) => { setSelectedSignature(e.target.value); setIsUnlocked(false); setUnlockError(''); }}>
+                                <Select 
+                                    value={selectedSignature} 
+                                    label="Seleccionar Firma a Usar" 
+                                    onChange={(e) => { 
+                                        setSelectedSignature(e.target.value); 
+                                        setIsUnlocked(false); 
+                                        setUnlockError(''); 
+                                    }}
+                                >
                                     {signatures.map((sig) => (
                                         <MenuItem key={sig.id} value={sig.id}>{sig.fileName}</MenuItem>
                                     ))}
@@ -227,7 +393,12 @@ const FileUpload = () => {
                                         sx={{ mb: 2 }}
                                         disabled={isUnlocked}
                                     />
-                                    <Button onClick={handleUnlockSignature} variant="outlined" disabled={isUnlocking || isUnlocked} startIcon={isUnlocking ? <CircularProgress size={20} /> : (isUnlocked ? <LockOpen /> : <Lock />)}>
+                                    <Button 
+                                        onClick={handleUnlockSignature} 
+                                        variant="outlined" 
+                                        disabled={isUnlocking || isUnlocked} 
+                                        startIcon={isUnlocking ? <CircularProgress size={20} /> : (isUnlocked ? <LockOpen /> : <Lock />)}
+                                    >
                                         {isUnlocking ? 'Desbloqueando...' : (isUnlocked ? 'Firma Desbloqueada' : 'Desbloquear Firma')}
                                     </Button>
                                 </Box>
@@ -235,9 +406,26 @@ const FileUpload = () => {
                             {unlockError && <Alert severity="error" sx={{ mt: 2 }}>{unlockError}</Alert>}
                             
                             <Box sx={{ mt: 4 }}>
-                                <Button type="submit" variant="contained" fullWidth size="large" disabled={!isUnlocked} onClick={handleSubmit}>
-                                    Firmar Documento
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                    <Info sx={{ fontSize: 16, mr: 1, verticalAlign: 'middle' }} />
+                                    Arrastra la estampa en el documento para posicionarla donde desees. La estampa aparecerá en la página donde la coloques.
+                                </Typography>
+                                <Button 
+                                    type="submit" 
+                                    variant="contained" 
+                                    fullWidth 
+                                    size="large" 
+                                    disabled={!isUnlocked || signingLoading}
+                                    onClick={handleSignDocument}
+                                    startIcon={signingLoading ? <CircularProgress size={20} /> : <Download />}
+                                >
+                                    {signingLoading ? 'Firmando...' : 'Firmar Documento'}
                                 </Button>
+                                {signingProgress && (
+                                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
+                                        {signingProgress}
+                                    </Typography>
+                                )}
                             </Box>
                         </Paper>
                     </Box>

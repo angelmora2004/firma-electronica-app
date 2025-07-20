@@ -18,7 +18,8 @@ Signature.belongsTo(User, {
 
 const initDb = async () => {
     try {
-        await sequelize.sync({ alter: true });
+        // Usar force: false para evitar recrear tablas
+        await sequelize.sync({ force: false });
         console.log('Base de datos sincronizada correctamente.');
     } catch (error) {
         console.error('Error al inicializar la base de datos:', error);

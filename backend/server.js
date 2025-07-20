@@ -4,6 +4,7 @@ const path = require('path');
 const helmet = require('helmet');
 require('dotenv').config();
 const initDb = require('./config/init-db');
+require('./utils/cleanup'); // Iniciar limpieza automática de archivos temporales
 
 const app = express();
 

@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@pdf-lib/standard-fonts": "^1.0.0",
     "backend": "file:",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -21,6 +22,9 @@
     "jsonwebtoken": "^9.0.0",
     "multer": "^2.0.1",
     "mysql2": "^3.2.0",
+    "node-forge": "^1.3.1",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "sequelize": "^6.31.0"
   },
   "devDependencies": {

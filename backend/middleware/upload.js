@@ -1,31 +1,33 @@
 const multer = require('multer');
 const path = require('path');
 
-// Configuración del almacenamiento
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/files/');
+// Configuración para subir documentos PDF
+const documentStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, path.join(__dirname, '../uploads/temp_sign'));
     },
-    filename: function (req, file, cb) {
-        // Generar nombre único para el archivo
+    filename: (req, file, cb) => {
+        // Generar un nombre único para el archivo
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
+        cb(null, `doc_${uniqueSuffix}${path.extname(file.originalname)}`);
     }
 });
 
-// Filtro de archivo actualizado
-const fileFilter = (req, file, cb) => {
-    // Permitir todos los tipos de archivo por ahora
-    cb(null, true);
-};
-
-// Configuración de multer
-const upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
+const documentUpload = multer({
+    storage: documentStorage,
+    fileFilter: (req, file, cb) => {
+        // Solo permitir PDFs
+        if (file.mimetype === 'application/pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error('Solo se permiten archivos PDF'), false);
+        }
+    },
     limits: {
-        fileSize: 5 * 1024 * 1024 // límite de 5MB
+        fileSize: 10 * 1024 * 1024 // 10MB máximo
     }
 });
 
-module.exports = upload; 
+module.exports = {
+    documentUpload
+}; 

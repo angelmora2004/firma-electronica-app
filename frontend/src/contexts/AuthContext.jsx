@@ -33,10 +33,11 @@ export const AuthProvider = ({ children }) => {
         const responseInterceptor = axios.interceptors.response.use(
             (response) => response,
             (error) => {
-                // Condición para redirigir en 401
+                // Solo redirigir en 401 si no es una petición de autenticación
+                const isAuthRequest = error.config.url.includes('/auth/');
                 const shouldRedirect = 
                     error.response?.status === 401 &&
-                    !error.config.url.includes('/signatures/');
+                    !isAuthRequest;
 
                 if (shouldRedirect) {
                     setUser(null);
