@@ -8,6 +8,9 @@ import Dashboard from './components/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import UserCertificate from './components/UserCertificate';
 import VerifyEmail from './components/VerifyEmail';
+import ForgotPassword from './components/ForgotPassword';
+import VerifyResetCode from './components/VerifyResetCode';
+import ResetPassword from './components/ResetPassword';
 
 const theme = createTheme({
   palette: {
@@ -112,6 +115,9 @@ const App = () => {
               }
             />
             <Route path="/verificar-correo" element={<VerifyEmail />} />
+            <Route path="/recuperar" element={<ForgotPassword />} />
+            <Route path="/verificar-codigo" element={<VerifyResetCode />} />
+            <Route path="/cambiar-contraseña" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>

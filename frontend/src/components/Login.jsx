@@ -238,6 +238,24 @@ const Login = () => {
                     </Link>
                 </Box>
 
+                <Box sx={{ textAlign: 'center', mt: 2 }}>
+                    <Link
+                        component="button"
+                        variant="body2"
+                        onClick={() => navigate('/recuperar')}
+                        sx={{
+                            textDecoration: 'none',
+                            color: 'primary.main',
+                            '&:hover': {
+                                color: 'primary.light',
+                                textDecoration: 'underline',
+                            }
+                        }}
+                    >
+                        ¿Olvidaste tu contraseña?
+                    </Link>
+                </Box>
+
                 <Box sx={{ mt: 3, textAlign: 'center' }}>
                     <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>
                         <Security sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />

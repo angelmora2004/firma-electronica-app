@@ -5,6 +5,7 @@ const User = require('../models/User');
 const EmailVerificationToken = require('../models/EmailVerificationToken');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const PasswordResetToken = require('../models/PasswordResetToken');
 
 // Verificar que JWT_SECRET esté definido
 if (!process.env.JWT_SECRET) {
@@ -170,14 +171,32 @@ router.post('/register', async (req, res) => {
         const verificationUrl = `${process.env.APP_BASE_URL}/api/auth/verify-email?token=${verificationToken}`;
 
         // Enviar el correo
+        const html = `
+          <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px 24px 24px 24px;box-shadow:0 4px 24px rgba(0,0,0,0.08);font-family:'Segoe UI',Arial,sans-serif;">
+            <div style="text-align:center;">
+              <img src="https://img.icons8.com/color/96/000000/checked--v2.png" alt="Firma Electrónica" style="width:64px;margin-bottom:16px;" />
+              <h2 style="color:#00d4aa;margin-bottom:8px;">¡Bienvenido a Firma Electrónica!</h2>
+            </div>
+            <p style="color:#222;font-size:1.1rem;margin-bottom:24px;">
+              Hola <b>${user.nombre}</b>,<br>
+              Gracias por registrarte. Para activar tu cuenta, por favor haz clic en el siguiente botón:
+            </p>
+            <div style="text-align:center;margin-bottom:24px;">
+              <a href="${verificationUrl}" style="background:#00d4aa;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:1.1rem;display:inline-block;">
+                Verificar mi correo
+              </a>
+            </div>
+            <p style="color:#888;font-size:0.95rem;text-align:center;">
+              Si no creaste esta cuenta, puedes ignorar este mensaje.<br>
+              <span style="color:#bbb;">Firma Electrónica &copy; ${new Date().getFullYear()}</span>
+            </p>
+          </div>
+        `;
         await transporter.sendMail({
             from: process.env.SMTP_FROM || 'no-reply@firmaelectronica.com',
             to: email,
             subject: 'Verifica tu correo electrónico',
-            html: `<p>Hola ${nombre},</p>
-                   <p>Por favor verifica tu correo haciendo clic en el siguiente enlace:</p>
-                   <a href="${verificationUrl}">${verificationUrl}</a>
-                   <p>Si no creaste esta cuenta, ignora este correo.</p>`
+            html
         });
 
         res.status(201).json({ 
@@ -263,19 +282,162 @@ router.post('/resend-verification', async (req, res) => {
             throw new Error('La variable de entorno APP_BASE_URL no está definida');
         }
         const verificationUrl = `${process.env.APP_BASE_URL}/api/auth/verify-email?token=${verificationToken}`;
+        const html = `
+          <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px 24px 24px 24px;box-shadow:0 4px 24px rgba(0,0,0,0.08);font-family:'Segoe UI',Arial,sans-serif;">
+            <div style="text-align:center;">
+              <img src="https://img.icons8.com/color/96/000000/checked--v2.png" alt="Firma Electrónica" style="width:64px;margin-bottom:16px;" />
+              <h2 style="color:#00d4aa;margin-bottom:8px;">¡Bienvenido a Firma Electrónica!</h2>
+            </div>
+            <p style="color:#222;font-size:1.1rem;margin-bottom:24px;">
+              Hola <b>${user.nombre}</b>,<br>
+              Gracias por registrarte. Para activar tu cuenta, por favor haz clic en el siguiente botón:
+            </p>
+            <div style="text-align:center;margin-bottom:24px;">
+              <a href="${verificationUrl}" style="background:#00d4aa;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:1.1rem;display:inline-block;">
+                Verificar mi correo
+              </a>
+            </div>
+            <p style="color:#888;font-size:0.95rem;text-align:center;">
+              Si no creaste esta cuenta, puedes ignorar este mensaje.<br>
+              <span style="color:#bbb;">Firma Electrónica &copy; ${new Date().getFullYear()}</span>
+            </p>
+          </div>
+        `;
         await transporter.sendMail({
             from: process.env.SMTP_FROM || 'no-reply@firmaelectronica.com',
             to: email,
             subject: 'Verifica tu correo electrónico',
-            html: `<p>Hola ${user.nombre},</p>
-                   <p>Por favor verifica tu correo haciendo clic en el siguiente enlace:</p>
-                   <a href="${verificationUrl}">${verificationUrl}</a>
-                   <p>Si no creaste esta cuenta, ignora este correo.</p>`
+            html
         });
         res.json({ message: 'Correo de verificación reenviado. Revisa tu bandeja de entrada.' });
     } catch (error) {
         console.error('Error reenviando correo de verificación:', error);
         res.status(500).json({ error: 'No se pudo reenviar el correo de verificación.' });
+    }
+});
+
+// Solicitar recuperación de contraseña
+router.post('/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ error: 'El correo es requerido.' });
+    }
+    try {
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            // Por seguridad, responder igual aunque el usuario no exista
+            return res.json({ message: 'Si el correo está registrado, recibirás un código de recuperación.' });
+        }
+        // Eliminar tokens previos
+        await PasswordResetToken.destroy({ where: { userId: user.id } });
+        // Generar código de 6 dígitos
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+        await PasswordResetToken.create({
+            userId: user.id,
+            token: code,
+            expiresAt
+        });
+        // Enviar correo con el código
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS
+            }
+        });
+        const html = `
+          <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px 24px 24px 24px;box-shadow:0 4px 24px rgba(0,0,0,0.08);font-family:'Segoe UI',Arial,sans-serif;">
+            <div style="text-align:center;">
+              <img src="https://img.icons8.com/color/96/000000/forgot-password.png" alt="Recuperar contraseña" style="width:64px;margin-bottom:16px;" />
+              <h2 style="color:#00d4aa;margin-bottom:8px;">Recuperación de Contraseña</h2>
+            </div>
+            <p style="color:#222;font-size:1.1rem;margin-bottom:24px;">
+              Hola <b>${user.nombre}</b>,<br>
+              Tu código de recuperación es:
+            </p>
+            <div style="text-align:center;margin-bottom:24px;">
+              <span style="background:#00d4aa;color:#fff;padding:14px 32px;border-radius:8px;font-weight:600;font-size:1.5rem;letter-spacing:4px;display:inline-block;">
+                ${code}
+              </span>
+            </div>
+            <p style="color:#888;font-size:0.95rem;text-align:center;">
+              Este código es válido por 15 minutos.<br>
+              Si no solicitaste este cambio, puedes ignorar este mensaje.<br>
+              <span style="color:#bbb;">Firma Electrónica &copy; ${new Date().getFullYear()}</span>
+            </p>
+          </div>
+        `;
+        await transporter.sendMail({
+            from: process.env.SMTP_FROM || 'no-reply@firmaelectronica.com',
+            to: email,
+            subject: 'Código de recuperación de contraseña',
+            html
+        });
+        return res.json({ message: 'Si el correo está registrado, recibirás un código de recuperación.' });
+    } catch (error) {
+        console.error('Error en recuperación de contraseña:', error);
+        res.status(500).json({ error: 'No se pudo enviar el código de recuperación.' });
+    }
+});
+
+// Verificar código de recuperación
+router.post('/verify-reset-code', async (req, res) => {
+    const { email, code } = req.body;
+    if (!email || !code) {
+        return res.status(400).json({ error: 'Correo y código son requeridos.' });
+    }
+    try {
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            return res.status(400).json({ error: 'Código inválido o expirado.' });
+        }
+        const tokenRecord = await PasswordResetToken.findOne({
+            where: { userId: user.id, token: code }
+        });
+        if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
+            return res.status(400).json({ error: 'Código inválido o expirado.' });
+        }
+        return res.json({ message: 'Código válido.' });
+    } catch (error) {
+        console.error('Error verificando código de recuperación:', error);
+        res.status(500).json({ error: 'No se pudo verificar el código.' });
+    }
+});
+
+// Cambiar contraseña usando el código de recuperación
+router.post('/reset-password', async (req, res) => {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) {
+        return res.status(400).json({ error: 'Correo, código y nueva contraseña son requeridos.' });
+    }
+    // Validación de contraseña fuerte (igual que en el registro)
+    const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*()_+\-={}\[\]:;"'<>,.?/~`]).{6,}$/;
+    if (!strongPassword.test(newPassword)) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres, una mayúscula, una minúscula y un carácter especial.' });
+    }
+    try {
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            return res.status(400).json({ error: 'Código inválido o expirado.' });
+        }
+        const tokenRecord = await PasswordResetToken.findOne({
+            where: { userId: user.id, token: code }
+        });
+        if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
+            return res.status(400).json({ error: 'Código inválido o expirado.' });
+        }
+        // Actualizar contraseña
+        user.password = newPassword;
+        await user.save();
+        // Eliminar el token usado
+        await tokenRecord.destroy();
+        return res.json({ message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
+    } catch (error) {
+        console.error('Error cambiando contraseña:', error);
+        res.status(500).json({ error: 'No se pudo cambiar la contraseña.' });
     }
 });
 

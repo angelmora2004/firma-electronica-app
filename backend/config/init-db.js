@@ -4,6 +4,7 @@ const Signature = require('../models/Signature');
 const CAKey = require('../models/CAKey');
 const SignedDocument = require('../models/SignedDocument');
 const EmailVerificationToken = require('../models/EmailVerificationToken');
+const PasswordResetToken = require('../models/PasswordResetToken');
 
 User.hasMany(Signature, {
     foreignKey: {
@@ -38,6 +39,19 @@ User.hasMany(EmailVerificationToken, {
     }
 });
 EmailVerificationToken.belongsTo(User, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+// Relación para tokens de recuperación de contraseña
+User.hasMany(PasswordResetToken, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+PasswordResetToken.belongsTo(User, {
     foreignKey: {
         name: 'userId',
         allowNull: false
