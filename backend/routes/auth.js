@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const EmailVerificationToken = require('../models/EmailVerificationToken');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 // Verificar que JWT_SECRET esté definido
 if (!process.env.JWT_SECRET) {
@@ -85,6 +88,10 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Usuario desactivado' });
         }
 
+        if (!user.emailVerified) {
+            return res.status(401).json({ error: 'Debes verificar tu correo antes de iniciar sesión.' });
+        }
+
         const token = jwt.sign(
             { 
                 id: user.id,
@@ -135,29 +142,140 @@ router.post('/register', async (req, res) => {
         }
 
         const user = await User.create({ nombre, email, password });
-        const token = jwt.sign(
-            { 
-                id: user.id,
-                email: user.email,
-                iat: Math.floor(Date.now() / 1000)
-            }, 
-            process.env.JWT_SECRET, 
-            {
-                expiresIn: process.env.JWT_EXPIRES_IN
+
+        // Generar token único de verificación
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 día
+        await EmailVerificationToken.create({
+            userId: user.id,
+            token: verificationToken,
+            expiresAt
+        });
+
+        // Configurar el transporter de nodemailer (ajusta con tus credenciales reales)
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            secure: process.env.SMTP_SECURE === 'true', // true para 465, false para otros
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS
             }
-        );
+        });
+
+        // Enlace de verificación (solo usa la variable de entorno, no valores por defecto)
+        if (!process.env.APP_BASE_URL) {
+            throw new Error('La variable de entorno APP_BASE_URL no está definida');
+        }
+        const verificationUrl = `${process.env.APP_BASE_URL}/api/auth/verify-email?token=${verificationToken}`;
+
+        // Enviar el correo
+        await transporter.sendMail({
+            from: process.env.SMTP_FROM || 'no-reply@firmaelectronica.com',
+            to: email,
+            subject: 'Verifica tu correo electrónico',
+            html: `<p>Hola ${nombre},</p>
+                   <p>Por favor verifica tu correo haciendo clic en el siguiente enlace:</p>
+                   <a href="${verificationUrl}">${verificationUrl}</a>
+                   <p>Si no creaste esta cuenta, ignora este correo.</p>`
+        });
 
         res.status(201).json({ 
             user: {
                 id: user.id,
                 nombre: user.nombre,
                 email: user.email
-            }, 
-            token 
+            },
+            message: 'Registro exitoso. Por favor revisa tu correo para verificar tu cuenta.'
         });
     } catch (error) {
         console.error('Error en registro:', error);
         res.status(400).json({ error: error.message });
+    }
+});
+
+// Endpoint para verificar el correo electrónico
+router.get('/verify-email', async (req, res) => {
+    const { token } = req.query;
+    if (!token) {
+        return res.status(400).json({ error: 'Token de verificación faltante.' });
+    }
+    try {
+        const record = await EmailVerificationToken.findOne({ where: { token } });
+        if (!record) {
+            return res.status(400).json({ error: 'Token inválido o ya utilizado.' });
+        }
+        if (record.expiresAt < new Date()) {
+            await record.destroy();
+            return res.status(400).json({ error: 'El token ha expirado. Solicita un nuevo registro.' });
+        }
+        // Marcar usuario como verificado
+        const user = await User.findByPk(record.userId);
+        if (!user) {
+            await record.destroy();
+            return res.status(400).json({ error: 'Usuario no encontrado.' });
+        }
+        user.emailVerified = true;
+        await user.save();
+        await record.destroy();
+        return res.json({ message: '¡Correo verificado exitosamente! Ya puedes iniciar sesión.' });
+    } catch (error) {
+        console.error('Error verificando correo:', error);
+        res.status(500).json({ error: 'Error interno al verificar el correo.' });
+    }
+});
+
+// Reenviar correo de verificación
+router.post('/resend-verification', async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ error: 'El correo es requerido.' });
+    }
+    try {
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado.' });
+        }
+        if (user.emailVerified) {
+            return res.status(400).json({ error: 'El correo ya está verificado.' });
+        }
+        // Eliminar tokens previos
+        await EmailVerificationToken.destroy({ where: { userId: user.id } });
+        // Generar nuevo token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 día
+        await EmailVerificationToken.create({
+            userId: user.id,
+            token: verificationToken,
+            expiresAt
+        });
+        // Configurar el transporter de nodemailer
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS
+            }
+        });
+        if (!process.env.APP_BASE_URL) {
+            throw new Error('La variable de entorno APP_BASE_URL no está definida');
+        }
+        const verificationUrl = `${process.env.APP_BASE_URL}/api/auth/verify-email?token=${verificationToken}`;
+        await transporter.sendMail({
+            from: process.env.SMTP_FROM || 'no-reply@firmaelectronica.com',
+            to: email,
+            subject: 'Verifica tu correo electrónico',
+            html: `<p>Hola ${user.nombre},</p>
+                   <p>Por favor verifica tu correo haciendo clic en el siguiente enlace:</p>
+                   <a href="${verificationUrl}">${verificationUrl}</a>
+                   <p>Si no creaste esta cuenta, ignora este correo.</p>`
+        });
+        res.json({ message: 'Correo de verificación reenviado. Revisa tu bandeja de entrada.' });
+    } catch (error) {
+        console.error('Error reenviando correo de verificación:', error);
+        res.status(500).json({ error: 'No se pudo reenviar el correo de verificación.' });
     }
 });
 

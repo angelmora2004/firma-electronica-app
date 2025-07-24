@@ -64,21 +64,53 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showResend, setShowResend] = useState(false);
+    const [resendLoading, setResendLoading] = useState(false);
+    const [resendSuccess, setResendSuccess] = useState('');
     const navigate = useNavigate();
     const { login } = useAuth();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setShowResend(false);
+        setResendSuccess('');
         setLoading(true);
 
         try {
             await login(email, password);
             navigate('/dashboard');
         } catch (err) {
-            setError(err.response?.data?.message || 'Error al iniciar sesión');
+            const msg = err.response?.data?.error || 'Error al iniciar sesión';
+            setError(msg);
+            if (msg.includes('Debes verificar tu correo')) {
+                setShowResend(true);
+            }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleResend = async () => {
+        setResendLoading(true);
+        setResendSuccess('');
+        setError('');
+        try {
+            const res = await fetch('/api/auth/resend-verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setResendSuccess(data.message || 'Correo de verificación reenviado. Revisa tu bandeja de entrada.');
+            } else {
+                setError(data.error || 'No se pudo reenviar el correo. Intenta más tarde.');
+            }
+        } catch (err) {
+            setError('No se pudo reenviar el correo. Intenta más tarde.');
+        } finally {
+            setResendLoading(false);
         }
     };
 
@@ -96,6 +128,31 @@ const Login = () => {
                         }}
                     >
                         {error}
+                        {showResend && (
+                            <Box sx={{ mt: 2 }}>
+                                <StyledButton
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={handleResend}
+                                    disabled={resendLoading}
+                                >
+                                    {resendLoading ? 'Enviando...' : 'Reenviar correo de verificación'}
+                                </StyledButton>
+                            </Box>
+                        )}
+                    </Alert>
+                )}
+                {resendSuccess && (
+                    <Alert 
+                        severity="success" 
+                        sx={{ 
+                            mb: 3,
+                            backgroundColor: 'rgba(0, 212, 170, 0.1)',
+                            border: '1px solid rgba(0, 212, 170, 0.3)',
+                            color: '#00d4aa'
+                        }}
+                    >
+                        {resendSuccess}
                     </Alert>
                 )}
                 

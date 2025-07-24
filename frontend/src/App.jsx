@@ -7,6 +7,7 @@ import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import UserCertificate from './components/UserCertificate';
+import VerifyEmail from './components/VerifyEmail';
 
 const theme = createTheme({
   palette: {
@@ -110,6 +111,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+            <Route path="/verificar-correo" element={<VerifyEmail />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>

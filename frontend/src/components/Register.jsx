@@ -58,6 +58,10 @@ const StyledButton = styled(Button)(({ theme }) => ({
     transition: 'all 0.3s ease',
 }));
 
+const isStrongPassword = (password) => {
+    return /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*()_+\-={}\[\]:;"'<>,.?/~`]).{6,}$/.test(password);
+};
+
 const Register = () => {
     const [formData, setFormData] = useState({
         name: '',
@@ -68,6 +72,7 @@ const Register = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
     const { register } = useAuth();
@@ -82,9 +87,14 @@ const Register = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccess('');
 
         if (formData.password !== formData.confirmPassword) {
             setError('Las contraseñas no coinciden');
+            return;
+        }
+        if (!isStrongPassword(formData.password)) {
+            setError('La contraseña debe tener al menos 6 caracteres, una mayúscula, una minúscula y un carácter especial.');
             return;
         }
 
@@ -92,7 +102,8 @@ const Register = () => {
 
         try {
             await register(formData.name, formData.email, formData.password);
-            navigate('/dashboard');
+            setSuccess('Registro exitoso. Por favor revisa tu correo para verificar tu cuenta.');
+            // Eliminada la redirección automática a /verificar-correo
         } catch (err) {
             setError(err.response?.data?.message || 'Error al registrar usuario');
         } finally {
@@ -114,6 +125,19 @@ const Register = () => {
                         }}
                     >
                         {error}
+                    </Alert>
+                )}
+                {success && (
+                    <Alert 
+                        severity="success" 
+                        sx={{ 
+                            mb: 3,
+                            backgroundColor: 'rgba(0, 212, 170, 0.1)',
+                            border: '1px solid rgba(0, 212, 170, 0.3)',
+                            color: '#00d4aa'
+                        }}
+                    >
+                        {success}
                     </Alert>
                 )}
 

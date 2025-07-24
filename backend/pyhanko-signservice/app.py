@@ -1,7 +1,7 @@
 from flask import Flask, request, send_file, jsonify
 import tempfile
 from pyhanko.sign import signers
-from pyhanko.sign.fields import SigFieldSpec
+from pyhanko.sign.fields import SigFieldSpec, enumerate_sig_fields
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 
 app = Flask(__name__)
@@ -28,10 +28,24 @@ def sign_pdf():
 
         with open(pdf_temp.name, 'rb') as inf:
             w = IncrementalPdfFileWriter(inf)
-            # No agregar campo de firma manualmente, PyHanko lo hará si es necesario
+            # Buscar campos de firma existentes y llenos
+            existing_fields = set()
+            filled_fields = set()
+            for name, value, ref in enumerate_sig_fields(w):
+                existing_fields.add(name)
+                if value is not None:
+                    filled_fields.add(name)
+            # Determinar el nombre del campo de firma a usar
+            base_field_name = 'FirmaDigital'
+            field_name = base_field_name
+            idx = 1
+            while field_name in filled_fields:
+                idx += 1
+                field_name = f'{base_field_name}_{idx}'
+            # Firmar usando el campo disponible o uno nuevo
             pdf_signed = signers.sign_pdf(
                 w,
-                signature_meta=signers.PdfSignatureMetadata(field_name='FirmaDigital'),
+                signature_meta=signers.PdfSignatureMetadata(field_name=field_name),
                 signer=signer
             )
 

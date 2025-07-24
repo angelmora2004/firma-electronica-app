@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Signature = require('../models/Signature');
 const CAKey = require('../models/CAKey');
 const SignedDocument = require('../models/SignedDocument');
+const EmailVerificationToken = require('../models/EmailVerificationToken');
 
 User.hasMany(Signature, {
     foreignKey: {
@@ -24,6 +25,19 @@ User.hasMany(SignedDocument, {
     }
 });
 SignedDocument.belongsTo(User, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+// Relación para tokens de verificación de email
+User.hasMany(EmailVerificationToken, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+EmailVerificationToken.belongsTo(User, {
     foreignKey: {
         name: 'userId',
         allowNull: false
