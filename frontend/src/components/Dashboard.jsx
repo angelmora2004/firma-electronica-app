@@ -57,7 +57,7 @@ import {
     SmartToy,
     VpnKey,
     Close,
-    AddCard
+    AddCard,
 } from '@mui/icons-material';
 import axios from '../config/axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -66,6 +66,7 @@ import AddSignature from './AddSignature';
 import UserCertificate from './UserCertificate';
 import CustomModal from './CustomModal';
 import SignedDocuments from './SignedDocuments';
+import { io as socketIOClient } from 'socket.io-client';
 
 const DashboardContainer = styled(Box)(({ theme }) => ({
     minHeight: '100vh',
@@ -184,6 +185,16 @@ const Dashboard = () => {
     // Estados para el modal de certificado digital
     const [certModalOpen, setCertModalOpen] = useState(false);
 
+    // Estados para las notificaciones
+    const [notifications, setNotifications] = useState([]);
+    const [notifLoading, setNotifLoading] = useState(false);
+    const [notifError, setNotifError] = useState('');
+    const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
+
+    // Estados para el modal de error de descarga
+    const [downloadErrorModal, setDownloadErrorModal] = useState(false);
+    const [downloadErrorMsg, setDownloadErrorMsg] = useState('');
+
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -197,14 +208,38 @@ const Dashboard = () => {
         }
     };
 
+    const fetchNotifications = async () => {
+        setNotifLoading(true);
+        setNotifError('');
+        try {
+            const { data } = await axios.get('/auth/notifications');
+            setNotifications(data);
+        } catch (error) {
+            setNotifError('Error al obtener notificaciones');
+        } finally {
+            setNotifLoading(false);
+        }
+    };
+
     useEffect(() => {
         const timerId = setInterval(() => setCurrentTime(new Date()), 60000);
         
         // Cargar las firmas cuando el componente se monta
         fetchSignatures();
+        fetchNotifications();
 
-        return () => clearInterval(timerId);
-    }, []);
+        // Socket.io conexión
+        const socket = socketIOClient('http://localhost:3001');
+        if (user?.id) {
+            socket.emit('register', user.id);
+        }
+        socket.on('nuevaNotificacion', (notif) => {
+            setNotifications((prev) => [notif, ...prev]);
+        });
+        return () => {
+            socket.disconnect();
+        };
+    }, [user?.id]);
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
@@ -323,6 +358,35 @@ const Dashboard = () => {
         setDownloadError('');
         setSelectedSignature(null);
     };
+
+    const handleDownloadP12 = async (notif) => {
+        try {
+            // Usar POST seguro con username y email
+            const response = await axios.post(
+                '/ca/download-p12',
+                { username: user.nombre, email: user.email },
+                { responseType: 'blob' }
+            );
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `${user.nombre}.p12`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            // Eliminar la notificación aprobada del estado
+            setNotifications(prev => prev.filter(n => n.id !== notif.id));
+        } catch (error) {
+            setDownloadErrorMsg(
+                error.response?.data?.message ||
+                'Error al descargar el archivo .p12. Si ya descargaste el archivo, la contraseña fue eliminada por seguridad.'
+            );
+            setDownloadErrorModal(true);
+        }
+    };
+
+    const unreadCount = notifications.filter(n => !n.leido).length;
 
     if (!user) {
         return (
@@ -539,12 +603,6 @@ const Dashboard = () => {
                                 </ActionCard>
                             </Grid>
                             <Grid item xs={6} md={3}>
-                                <ActionCard>
-                                    <Notifications sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
-                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>Notificaciones</Typography>
-                                </ActionCard>
-                            </Grid>
-                            <Grid item xs={6} md={3}>
                                 <ActionCard onClick={() => setCertModalOpen(true)}>
                                     <VerifiedUser sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>Solicitar Certificado Digital</Typography>
@@ -635,11 +693,14 @@ const Dashboard = () => {
                     </Typography>
                     
                     <Box display="flex" alignItems="center" gap={1}>
-                        <IconButton color="inherit">
-                            <Badge badgeContent={3} color="error">
-                                <Notifications />
-                            </Badge>
-                        </IconButton>
+                        {/* En el AppBar, envuelve el Badge y el IconButton en un Box clickable para que ambos abran el Drawer */}
+                        <Box onClick={() => setNotifDrawerOpen(true)} sx={{ cursor: 'pointer' }}>
+                            <IconButton color="inherit">
+                                <Badge badgeContent={unreadCount > 0 ? unreadCount : null} color="error">
+                                    <Notifications />
+                                </Badge>
+                            </IconButton>
+                        </Box>
                         <IconButton color="inherit" onClick={() => setSettingsOpen(true)}>
                             <Avatar sx={{ bgcolor: 'primary.main' }}>
                                 {user.nombre?.charAt(0) || 'U'}
@@ -683,6 +744,12 @@ const Dashboard = () => {
                             <Article color="primary" />
                         </ListItemIcon>
                         <ListItemText primary="Documentos Firmados" />
+                    </ListItem>
+                    <ListItem button onClick={() => { setActiveTab(4); setDrawerOpen(false); }}>
+                        <ListItemIcon>
+                            <Notifications color="primary" />
+                        </ListItemIcon>
+                        <ListItemText primary="Notificaciones" />
                     </ListItem>
                 </List>
             </StyledDrawer>
@@ -819,6 +886,107 @@ const Dashboard = () => {
             <CustomModal open={certModalOpen} onClose={() => setCertModalOpen(false)} title="Solicitar Certificado Digital">
                 <UserCertificate />
             </CustomModal>
+
+            {/* Drawer lateral para notificaciones */}
+            <Drawer
+                anchor="right"
+                open={notifDrawerOpen}
+                onClose={() => setNotifDrawerOpen(false)}
+            >
+                <Box sx={{ width: 420, p: 2 }}>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                            Notificaciones
+                        </Typography>
+                        <IconButton onClick={() => setNotifDrawerOpen(false)}>
+                            <Close />
+                        </IconButton>
+                    </Box>
+                    {notifLoading ? (
+                        <CircularProgress />
+                    ) : notifError ? (
+                        <Alert severity="error">{notifError}</Alert>
+                    ) : notifications.length === 0 ? (
+                        <Typography color="text.secondary">No tienes notificaciones.</Typography>
+                    ) : (
+                        <List>
+                            {notifications.map((notif) => (
+                                <React.Fragment key={notif.id}>
+                                    <ListItem
+                                        alignItems="flex-start"
+                                        sx={{ mb: 2, background: notif.leido ? 'transparent' : notif.tipo === 'aprobada' ? 'rgba(0, 212, 170, 0.13)' : 'rgba(255,0,0,0.07)', borderRadius: 2, position: 'relative' }}
+                                        onClick={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                                    >
+                                        <ListItemIcon>
+                                            {notif.tipo === 'aprobada' ? <CheckCircle color="success" /> : <Warning color="error" />}
+                                        </ListItemIcon>
+                                        <ListItemText
+                                            primary={<Typography sx={{ fontWeight: notif.leido ? 400 : 700 }}>{notif.mensaje}</Typography>}
+                                            secondary={
+                                                <>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {new Date(notif.createdAt).toLocaleString()}
+                                                    </Typography>
+                                                    {notif.tipo === 'rechazada' && notif.adminComment && (
+                                                        <Typography variant="caption" color="error.main" sx={{ display: 'block' }}>
+                                                            Motivo: {notif.adminComment}
+                                                        </Typography>
+                                                    )}
+                                                </>
+                                            }
+                                        />
+                                        {notif.tipo === 'rechazada' && (
+                                            <IconButton
+                                                size="small"
+                                                sx={{ position: 'absolute', top: 8, right: 8 }}
+                                                onClick={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                                            >
+                                                <Close fontSize="small" />
+                                            </IconButton>
+                                        )}
+                                        {notif.tipo === 'aprobada' && notif.link && (
+                                            <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', mt: 1 }}>
+                                                <Button
+                                                    variant="contained"
+                                                    color="success"
+                                                    size="small"
+                                                    startIcon={<Download />}
+                                                    onClick={() => handleDownloadP12(notif)}
+                                                    sx={{
+                                                        borderRadius: 2,
+                                                        fontWeight: 700,
+                                                        px: 2,
+                                                        py: 0.5,
+                                                        fontSize: '0.95rem',
+                                                        minWidth: 120,
+                                                        boxShadow: '0 2px 8px rgba(0,212,170,0.13)'
+                                                    }}
+                                                >
+                                                    Descargar .p12
+                                                </Button>
+                                            </Box>
+                                        )}
+                                    </ListItem>
+                                    <Divider />
+                                </React.Fragment>
+                            ))}
+                        </List>
+                    )}
+                </Box>
+            </Drawer>
+
+            {/* Modal de error de descarga */}
+            <Dialog open={downloadErrorModal} onClose={() => setDownloadErrorModal(false)}>
+                <DialogTitle>Error al descargar</DialogTitle>
+                <DialogContent>
+                    <Typography>{downloadErrorMsg}</Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDownloadErrorModal(false)} color="primary" autoFocus>
+                        Cerrar
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </DashboardContainer>
     );
 };

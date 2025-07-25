@@ -5,6 +5,9 @@ const CAKey = require('../models/CAKey');
 const SignedDocument = require('../models/SignedDocument');
 const EmailVerificationToken = require('../models/EmailVerificationToken');
 const PasswordResetToken = require('../models/PasswordResetToken');
+const CertificateRequest = require('../models/CertificateRequest');
+const Admin = require('../models/Admin');
+const Notification = require('../models/Notification');
 
 User.hasMany(Signature, {
     foreignKey: {
@@ -52,6 +55,32 @@ User.hasMany(PasswordResetToken, {
     }
 });
 PasswordResetToken.belongsTo(User, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+// Relación para solicitudes de certificados
+User.hasMany(CertificateRequest, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+CertificateRequest.belongsTo(User, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+// Relación para notificaciones
+User.hasMany(Notification, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+Notification.belongsTo(User, {
     foreignKey: {
         name: 'userId',
         allowNull: false

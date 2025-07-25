@@ -5,8 +5,38 @@ const helmet = require('helmet');
 require('dotenv').config();
 const initDb = require('./config/init-db');
 require('./utils/cleanup'); // Iniciar limpieza automática de archivos temporales
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*', // Cambia por tu frontend real en producción
+    methods: ['GET', 'POST']
+  }
+});
+
+// Mapea userId a socketId
+const userSockets = new Map();
+
+io.on('connection', (socket) => {
+  socket.on('register', (userId) => {
+    userSockets.set(userId, socket.id);
+  });
+  socket.on('disconnect', () => {
+    for (const [userId, sockId] of userSockets.entries()) {
+      if (sockId === socket.id) {
+        userSockets.delete(userId);
+        break;
+      }
+    }
+  });
+});
+
+// Exporta io y userSockets para usarlos en los endpoints
+module.exports.io = io;
+module.exports.userSockets = userSockets;
 
 // Middleware de seguridad
 app.use(helmet());
@@ -47,9 +77,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT;
-
-// Iniciar servidor HTTP
-app.listen(PORT, async () => {
-    console.log(`Servidor corriendo en el puerto ${PORT}`);
-    await initDb();
+server.listen(process.env.PORT, async () => {
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
+  await initDb();
 }); 

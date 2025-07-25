@@ -6,6 +6,8 @@ const EmailVerificationToken = require('../models/EmailVerificationToken');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const PasswordResetToken = require('../models/PasswordResetToken');
+const Admin = require('../models/Admin');
+const Notification = require('../models/Notification');
 
 // Verificar que JWT_SECRET esté definido
 if (!process.env.JWT_SECRET) {
@@ -79,40 +81,52 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Email inválido' });
         }
 
-        const user = await User.findOne({ where: { email } });
-
-        if (!user || !(await user.validatePassword(password))) {
-            return res.status(401).json({ error: 'Credenciales inválidas' });
-        }
-
-        if (!user.activo) {
-            return res.status(401).json({ error: 'Usuario desactivado' });
-        }
-
-        if (!user.emailVerified) {
-            return res.status(401).json({ error: 'Debes verificar tu correo antes de iniciar sesión.' });
-        }
-
-        const token = jwt.sign(
-            { 
-                id: user.id,
-                email: user.email,
-                iat: Math.floor(Date.now() / 1000)
-            }, 
-            process.env.JWT_SECRET, 
-            {
-                expiresIn: process.env.JWT_EXPIRES_IN
+        // Buscar primero en usuarios normales
+        let user = await User.findOne({ where: { email } });
+        if (user && await user.validatePassword(password)) {
+            if (!user.activo) {
+                return res.status(401).json({ error: 'Usuario desactivado' });
             }
-        );
+            if (!user.emailVerified) {
+                return res.status(401).json({ error: 'Debes verificar tu correo antes de iniciar sesión.' });
+            }
+            const token = jwt.sign(
+                { id: user.id, email: user.email, iat: Math.floor(Date.now() / 1000), role: 'user' },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.JWT_EXPIRES_IN }
+            );
+            return res.json({
+                user: {
+                    id: user.id,
+                    nombre: user.nombre,
+                    email: user.email
+                },
+                token,
+                role: 'user'
+            });
+        }
 
-        res.json({ 
-            user: {
-                id: user.id,
-                nombre: user.nombre,
-                email: user.email
-            }, 
-            token 
-        });
+        // Si no es usuario, buscar en admins
+        const admin = await Admin.findOne({ where: { email } });
+        if (admin && await admin.validatePassword(password)) {
+            const token = jwt.sign(
+                { id: admin.id, email: admin.email, iat: Math.floor(Date.now() / 1000), role: 'admin' },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.JWT_EXPIRES_IN }
+            );
+            return res.json({
+                admin: {
+                    id: admin.id,
+                    nombre: admin.nombre,
+                    email: admin.email
+                },
+                token,
+                role: 'admin'
+            });
+        }
+
+        // Si no es ninguno
+        return res.status(401).json({ error: 'Credenciales inválidas' });
     } catch (error) {
         console.error('Error en login:', error);
         res.status(500).json({ error: 'Error en el servidor' });
@@ -441,6 +455,25 @@ router.post('/reset-password', async (req, res) => {
     }
 });
 
+// Crear un admin (solo para uso desde Postman, no frontend)
+router.post('/admin/create', async (req, res) => {
+    try {
+        const { nombre, email, password } = req.body;
+        if (!nombre || !email || !password) {
+            return res.status(400).json({ error: 'Todos los campos son requeridos' });
+        }
+        const existing = await Admin.findOne({ where: { email } });
+        if (existing) {
+            return res.status(400).json({ error: 'El email ya está registrado como admin' });
+        }
+        const admin = await Admin.create({ nombre, email, password });
+        res.status(201).json({ message: 'Admin creado correctamente', admin: { id: admin.id, nombre: admin.nombre, email: admin.email } });
+    } catch (error) {
+        console.error('Error creando admin:', error);
+        res.status(500).json({ error: 'Error al crear admin' });
+    }
+});
+
 // Obtener usuario actual
 router.get('/me', auth, async (req, res) => {
     res.json({
@@ -487,6 +520,19 @@ router.delete('/me', auth, async (req, res) => {
     } catch (error) {
         console.error('Error al eliminar cuenta:', error);
         res.status(500).json({ error: 'Error al eliminar cuenta' });
+    }
+});
+
+// Obtener notificaciones del usuario autenticado
+router.get('/notifications', auth, async (req, res) => {
+    try {
+        const notifications = await Notification.findAll({
+            where: { userId: req.user.id },
+            order: [['createdAt', 'DESC']]
+        });
+        res.json(notifications);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener notificaciones' });
     }
 });
 

@@ -78,8 +78,12 @@ const Login = () => {
         setLoading(true);
 
         try {
-            await login(email, password);
-            navigate('/dashboard');
+            const response = await login(email, password);
+            if (response?.role === 'admin') {
+                navigate('/admin');
+            } else {
+                navigate('/dashboard');
+            }
         } catch (err) {
             const msg = err.response?.data?.error || 'Error al iniciar sesión';
             setError(msg);

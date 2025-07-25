@@ -8,6 +8,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:3001',
+      '/ca': 'http://localhost:3001',
     },
   }
 })

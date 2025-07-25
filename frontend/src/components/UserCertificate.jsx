@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from '../config/axios';
-import { Box, TextField, InputAdornment, Typography, Button, Tooltip, Fade, IconButton, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import { Box, TextField, InputAdornment, Typography, Button, Tooltip, Fade, IconButton, MenuItem, Select, FormControl, InputLabel, Alert, Snackbar } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import EmailIcon from '@mui/icons-material/Email';
 import PublicIcon from '@mui/icons-material/Public';
@@ -9,6 +9,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import ApartmentIcon from '@mui/icons-material/Apartment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CustomModal from './CustomModal';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 
 const StyledBox = styled(Box)(({ theme }) => ({
   background: theme.palette.background.paper,
@@ -124,25 +125,7 @@ const fields = [
     type: 'text',
     autoComplete: 'address-level2',
     helper: ''
-  },
-  {
-    name: 'organization',
-    label: 'Organización',
-    required: false,
-    icon: <BusinessIcon fontSize="small" sx={{ color: '#00d4aa' }} />,
-    type: 'text',
-    autoComplete: 'organization',
-    helper: ''
-  },
-  {
-    name: 'organizationalUnit',
-    label: 'Unidad organizacional',
-    required: false,
-    icon: <ApartmentIcon fontSize="small" sx={{ color: '#00d4aa' }} />,
-    type: 'text',
-    autoComplete: 'department',
-    helper: ''
-  },
+  }
 ];
 
 const initialErrors = {
@@ -168,7 +151,7 @@ const validate = (form) => {
 };
 
 const UserCertificate = () => {
-  const [form, setForm] = useState({ username: '', email: '', country: '', state: '', locality: '', organization: '', organizationalUnit: '' });
+  const [form, setForm] = useState({ username: '', email: '', country: '', state: '', locality: '', organization: '', organizationalUnit: '', password: '' });
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -179,6 +162,8 @@ const UserCertificate = () => {
   const [p12Password, setP12Password] = useState('');
   const [p12Loading, setP12Loading] = useState(false);
   const [showP12Modal, setShowP12Modal] = useState(false);
+  const [showP12Password, setShowP12Password] = useState(false);
+  const [showSnackbar, setShowSnackbar] = useState(false);
 
   const handleChange = e => {
     const { name, value } = e.target;
@@ -208,19 +193,20 @@ const UserCertificate = () => {
     const validation = validate(form);
     setErrors(validation);
     if (Object.keys(validation).length > 0) return;
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await axios.post('/ca/user-csr', form);
-      setMessage('Clave privada y solicitud generadas. Ahora puedes obtener tu certificado.');
-      setStep(2);
-      setDownloadLinks({ key: res.data.userKey, cert: '' });
-      // Elimina la descarga automática de la clave privada
-      // downloadFile(res.data.userKey, `${form.email}_privada.key`);
-    } catch (err) {
-      setMessage(err.response?.data?.message || 'Error generando CSR');
-    }
-    setLoading(false);
+    setShowSnackbar(true); // Mostrar aviso
+    setTimeout(async () => {
+      setLoading(true);
+      setMessage('');
+      try {
+        const res = await axios.post('/ca/user-csr', form); // Asegura la URL correcta
+        setMessage('Clave privada y solicitud generadas. Ahora puedes obtener tu certificado.');
+        setStep(2);
+        setDownloadLinks({ key: res.data.userKey, cert: '' });
+      } catch (err) {
+        setMessage(err.response?.data?.message || 'Error generando CSR');
+      }
+      setLoading(false);
+    }, 1200); // Espera 1.2s para mostrar el aviso antes de enviar
   };
 
   const handleSignCert = async () => {
@@ -416,6 +402,37 @@ const UserCertificate = () => {
             ))}
           </Select>
         </FormControl>
+        {/* Campo de contraseña para el .p12 */}
+        <StyledTextField
+          name="password"
+          label="Contraseña para el archivo .p12 *"
+          value={form.password || ''}
+          onChange={handleChange}
+          required
+          fullWidth
+          size="small"
+          variant="outlined"
+          type={showP12Password ? 'text' : 'password'}
+          autoComplete="new-password"
+          margin="dense"
+          InputLabelProps={{ style: { color: 'rgba(255,255,255,0.7)', fontWeight: 500, fontSize: '1rem' } }}
+          helperText="La contraseña protegerá tu archivo .p12."
+          disabled={step > 1}
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label="toggle p12 password visibility"
+                  onClick={() => setShowP12Password(!showP12Password)}
+                  edge="end"
+                  sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
+                >
+                  {showP12Password ? <VisibilityOff /> : <Visibility />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
         {/* Resto de campos */}
         {fields.filter(f => f.name !== 'email' && f.name !== 'username').map(field => (
           <StyledTextField
@@ -453,76 +470,76 @@ const UserCertificate = () => {
             disabled={loading}
             sx={{ mt: 2 }}
           >
-            {loading ? 'Generando...' : 'Generar certificado digital'}
+            {loading ? 'Solicitando...' : 'Solicitar Certificado Digital'}
           </StyledButton>
         )}
+        <Snackbar open={showSnackbar} autoHideDuration={5000} onClose={() => setShowSnackbar(false)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+          <Alert severity="info" sx={{ width: '100%' }}>
+            Tu solicitud será procesada por un administrador. Recibirás una notificación cuando sea aprobada o rechazada.
+          </Alert>
+        </Snackbar>
       </form>
       {step === 2 && (
-        <StyledButton
-          className="user-cert-btn"
-          onClick={handleSignCert}
-          fullWidth
-          disabled={loading}
-          sx={{ mt: 2, background: `linear-gradient(135deg, #00d4aa 0%, #33ddbb 100%)`, color: '#111' }}
-        >
-          {loading ? 'Firmando...' : 'Obtener mi certificado'}
-        </StyledButton>
+        // Eliminado: botón 'Obtener mi certificado'
+        null
       )}
       {message && step === 3 && (
         <div style={{ color: '#fff', margin: '24px 0 0 0', textAlign: 'center', fontWeight: 600, fontSize: '1.15rem' }}>
           {message}
         </div>
       )}
-      <CustomModal open={showP12Modal} onClose={() => setShowP12Modal(false)}>
-        <Box sx={{ 
-          background: '#181a1b',
-          color: '#fff',
-          borderRadius: 1,
-          p: 5,
-          textAlign: 'center',
-          minWidth: 420,
-          maxWidth: '98vw',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.45)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}>
-          <Typography variant="h6" sx={{ mb: 2, color: '#00d4aa', fontWeight: 700, fontSize: '2rem' }}>
-            Exportar certificado a formato .p12
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#b0f5e0', mb: 2, fontSize: '1.15rem' }}>
-            Ingresa una contraseña para proteger tu archivo .p12:
-          </Typography>
-          <TextField
-            type="password"
-            label="Contraseña para el archivo .p12"
-            value={p12Password}
-            onChange={e => setP12Password(e.target.value)}
-            size="small"
-            variant="outlined"
-            sx={{ width: 300, mb: 2, background: 'rgba(255,255,255,0.07)', borderRadius: 2, input: { color: '#fff', textAlign: 'center' } }}
-            InputLabelProps={{ style: { color: '#b0f5e0', fontWeight: 500, fontSize: '1rem' } }}
-            InputProps={{ style: { color: '#fff' } }}
-          />
-          <StyledButton
-            onClick={async () => {
-              await handleExportP12();
-              if (message && message.includes('descargado')) {
-                setTimeout(() => setShowP12Modal(false), 1200);
-              }
-            }}
-            disabled={p12Loading || !p12Password}
-            sx={{ minWidth: 280, background: `linear-gradient(135deg, #00d4aa 0%, #33ddbb 100%)`, color: '#111', fontSize: '1.25rem', fontWeight: 700, mt: 1, mb: 1, alignSelf: 'center' }}
-          >
-            {p12Loading ? 'Generando .p12...' : 'Exportar y descargar .p12'}
-          </StyledButton>
-          {message && (
-            <div style={{ color: message.includes('descargado') ? '#00d4aa' : '#fff', marginTop: 16, textAlign: 'center', fontWeight: 500 }}>
-              {message}
-            </div>
-          )}
-        </Box>
-      </CustomModal>
+      {showP12Modal && (
+        <CustomModal open={showP12Modal} onClose={() => setShowP12Modal(false)}>
+          <Box sx={{ 
+            background: '#181a1b',
+            color: '#fff',
+            borderRadius: 1,
+            p: 5,
+            textAlign: 'center',
+            minWidth: 420,
+            maxWidth: '98vw',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.45)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#00d4aa', fontWeight: 700, fontSize: '2rem' }}>
+              Exportar certificado a formato .p12
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#b0f5e0', mb: 2, fontSize: '1.15rem' }}>
+              Ingresa una contraseña para proteger tu archivo .p12:
+            </Typography>
+            <TextField
+              type="password"
+              label="Contraseña para el archivo .p12"
+              value={p12Password}
+              onChange={e => setP12Password(e.target.value)}
+              size="small"
+              variant="outlined"
+              sx={{ width: 300, mb: 2, background: 'rgba(255,255,255,0.07)', borderRadius: 2, input: { color: '#fff', textAlign: 'center' } }}
+              InputLabelProps={{ style: { color: '#b0f5e0', fontWeight: 500, fontSize: '1rem' } }}
+              InputProps={{ style: { color: '#fff' } }}
+            />
+            <StyledButton
+              onClick={async () => {
+                await handleExportP12();
+                if (message && message.includes('descargado')) {
+                  setTimeout(() => setShowP12Modal(false), 1200);
+                }
+              }}
+              disabled={p12Loading || !p12Password}
+              sx={{ minWidth: 280, background: `linear-gradient(135deg, #00d4aa 0%, #33ddbb 100%)`, color: '#111', fontSize: '1.25rem', fontWeight: 700, mt: 1, mb: 1, alignSelf: 'center' }}
+            >
+              {p12Loading ? 'Generando .p12...' : 'Exportar y descargar .p12'}
+            </StyledButton>
+            {message && (
+              <div style={{ color: message.includes('descargado') ? '#00d4aa' : '#fff', marginTop: 16, textAlign: 'center', fontWeight: 500 }}>
+                {message}
+              </div>
+            )}
+          </Box>
+        </CustomModal>
+      )}
     </StyledBox>
   );
 };

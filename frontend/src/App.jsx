@@ -11,6 +11,7 @@ import VerifyEmail from './components/VerifyEmail';
 import ForgotPassword from './components/ForgotPassword';
 import VerifyResetCode from './components/VerifyResetCode';
 import ResetPassword from './components/ResetPassword';
+import AdminDashboard from './components/AdminDashboard';
 
 const theme = createTheme({
   palette: {
@@ -118,6 +119,7 @@ const App = () => {
             <Route path="/recuperar" element={<ForgotPassword />} />
             <Route path="/verificar-codigo" element={<VerifyResetCode />} />
             <Route path="/cambiar-contraseña" element={<ResetPassword />} />
+            <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>
