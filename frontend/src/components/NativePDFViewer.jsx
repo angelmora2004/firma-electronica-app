@@ -8,16 +8,7 @@ import {
     FitScreen,
     RotateRight
 } from '@mui/icons-material';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configurar el worker de PDF.js
-try {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.js';
-} catch (error) {
-    console.warn('Error configurando PDF worker:', error);
-    // Fallback a configuración básica
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-}
+import { pdfjsLib } from '../config/pdfConfig';
 
 const NativePDFViewer = ({ 
     fileUrl, 
@@ -45,7 +36,13 @@ const NativePDFViewer = ({
                 setLoading(true);
                 setError(null);
 
-                const loadingTask = pdfjsLib.getDocument(fileUrl);
+                // Configurar opciones de carga
+                const loadingTask = pdfjsLib.getDocument({
+                    url: fileUrl,
+                    cMapUrl: 'https://unpkg.com/pdfjs-dist@5.3.93/cmaps/',
+                    cMapPacked: true,
+                });
+                
                 const pdf = await loadingTask.promise;
                 
                 setPdfDocument(pdf);
@@ -62,8 +59,14 @@ const NativePDFViewer = ({
                 // Manejar errores específicos del worker
                 if (err.name === 'WorkerError' || err.message.includes('worker')) {
                     setError('Error de configuración del visor PDF. Recarga la página.');
+                } else if (err.name === 'UnknownErrorException' && err.message.includes('API version')) {
+                    setError('Error de compatibilidad del visor PDF. Recarga la página.');
+                } else if (err.message.includes('fake worker failed')) {
+                    setError('Error de carga del worker PDF. Verifica tu conexión a internet.');
+                } else if (err.message.includes('dynamically imported module')) {
+                    setError('Error de carga del módulo PDF. Recarga la página.');
                 } else {
-                    setError('Error al cargar el PDF');
+                    setError(`Error al cargar el PDF: ${err.message}`);
                 }
                 setLoading(false);
             }
