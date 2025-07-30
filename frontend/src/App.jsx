@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
@@ -103,26 +104,28 @@ const App = () => {
   return (
     <ThemeProvider theme={theme}>
       <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/verificar-correo" element={<VerifyEmail />} />
-            <Route path="/recuperar" element={<ForgotPassword />} />
-            <Route path="/verificar-codigo" element={<VerifyResetCode />} />
-            <Route path="/cambiar-contraseña" element={<ResetPassword />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </Router>
+        <SocketProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/verificar-correo" element={<VerifyEmail />} />
+              <Route path="/recuperar" element={<ForgotPassword />} />
+              <Route path="/verificar-codigo" element={<VerifyResetCode />} />
+              <Route path="/cambiar-contraseña" element={<ResetPassword />} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </Router>
+        </SocketProvider>
       </AuthProvider>
     </ThemeProvider>
   );

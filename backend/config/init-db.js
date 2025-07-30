@@ -8,6 +8,9 @@ const PasswordResetToken = require('../models/PasswordResetToken');
 const CertificateRequest = require('../models/CertificateRequest');
 const Admin = require('../models/Admin');
 const Notification = require('../models/Notification');
+const UnsignedDocument = require('../models/UnsignedDocument');
+const SignatureRequest = require('../models/SignatureRequest');
+const Reminder = require('../models/Reminder');
 
 User.hasMany(Signature, {
     foreignKey: {
@@ -86,6 +89,44 @@ Notification.belongsTo(User, {
         allowNull: false
     }
 });
+
+// Relación para documentos sin firmar
+User.hasMany(UnsignedDocument, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+UnsignedDocument.belongsTo(User, {
+    foreignKey: {
+        name: 'userId',
+        allowNull: false
+    }
+});
+
+// Relaciones para solicitudes de firma
+User.hasMany(SignatureRequest, { 
+    as: 'sentRequests', 
+    foreignKey: 'senderId' 
+});
+User.hasMany(SignatureRequest, { 
+    as: 'receivedRequests', 
+    foreignKey: 'recipientId' 
+});
+SignatureRequest.belongsTo(User, { 
+    as: 'sender', 
+    foreignKey: 'senderId' 
+});
+SignatureRequest.belongsTo(User, { 
+    as: 'recipient', 
+    foreignKey: 'recipientId' 
+});
+
+// Relaciones para recordatorios
+User.hasMany(Reminder, { foreignKey: 'userId' });
+Reminder.belongsTo(User, { foreignKey: 'userId' });
+SignatureRequest.hasMany(Reminder, { foreignKey: 'signatureRequestId' });
+Reminder.belongsTo(SignatureRequest, { foreignKey: 'signatureRequestId' });
 
 const initDb = async () => {
     try {

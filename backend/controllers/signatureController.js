@@ -25,7 +25,21 @@ exports.uploadSignature = async (req, res) => {
     let verificationFailed = false;
     let verificationErrorMsg = '';
 
+    // Verificar que el archivo CA existe
+    if (!fsSync.existsSync(caCertPath)) {
+        console.error('CA certificate not found at:', caCertPath);
+        return res.status(500).json({ message: 'Error de configuración: Certificado de CA no encontrado.' });
+    }
+
+    console.log('CA certificate path:', caCertPath);
+    console.log('CA certificate exists:', fsSync.existsSync(caCertPath));
+
     try {
+        console.log('File path:', req.file.path);
+        console.log('File size:', req.file.size);
+        console.log('File originalname:', req.file.originalname);
+        console.log('Password provided:', req.body.password ? 'Yes' : 'No');
+        
         // 1. Extraer el certificado del .p12
         await new Promise((resolve, reject) => {
             const extract = spawn('openssl', [
@@ -34,8 +48,11 @@ exports.uploadSignature = async (req, res) => {
             let error = '';
             extract.stderr.on('data', (data) => { error += data.toString(); });
             extract.on('close', (code) => {
+                console.log('OpenSSL extract code:', code);
+                console.log('OpenSSL extract error:', error);
+                console.log('Temp cert exists:', fsSync.existsSync(tempCertPath));
                 if (code === 0 && fsSync.existsSync(tempCertPath)) resolve();
-                else reject(new Error('No se pudo extraer el certificado del archivo .p12. ' + error));
+                else reject(new Error(`No se pudo extraer el certificado del archivo .p12. Código: ${code}, Error: ${error}`));
             });
         });
 
@@ -49,8 +66,11 @@ exports.uploadSignature = async (req, res) => {
             verify.stdout.on('data', (data) => { output += data.toString(); });
             verify.stderr.on('data', (data) => { error += data.toString(); });
             verify.on('close', (code) => {
+                console.log('OpenSSL verify output:', output);
+                console.log('OpenSSL verify error:', error);
+                console.log('OpenSSL verify code:', code);
                 if (code === 0 && output.includes(': OK')) resolve();
-                else reject(new Error('El archivo .p12 no fue emitido por la Autoridad Certificadora registrada. ' + error + output));
+                else reject(new Error(`Verificación de CA falló. Código: ${code}, Output: ${output}, Error: ${error}`));
             });
         });
 
@@ -81,8 +101,15 @@ exports.uploadSignature = async (req, res) => {
         if (fsSync.existsSync(tempCertPath)) {
             try { await fs.unlink(tempCertPath); } catch {}
         }
-        // Unificar mensaje de error para cualquier fallo de validación/extracción
-        return res.status(400).json({ message: 'El archivo .p12 no fue emitido por la Autoridad Certificadora registrada.' });
+        
+        // Mensajes de error más específicos
+        if (error.message.includes('invalid password') || error.message.includes('Mac verify error')) {
+            return res.status(400).json({ message: 'La contraseña del archivo .p12 es incorrecta. Por favor verifica la contraseña e intenta nuevamente.' });
+        } else if (error.message.includes('Verificación de CA falló')) {
+            return res.status(400).json({ message: 'El archivo .p12 no fue emitido por la Autoridad Certificadora registrada.' });
+        } else {
+            return res.status(400).json({ message: 'Error al procesar el archivo .p12: ' + error.message });
+        }
     }
 };
 
@@ -206,6 +233,24 @@ exports.signDocument = [upload.single('pdf'), async (req, res) => {
             return res.status(400).json({ message: 'No se recibió el archivo PDF.' });
         }
         const pdfBuffer = await fs.readFile(req.file.path);
+
+        // 4.1. Si se proporcionó documentId, eliminar el documento original
+        if (documentId) {
+            try {
+                const UnsignedDocument = require('../models/UnsignedDocument');
+                const originalDocument = await UnsignedDocument.findOne({
+                    where: { id: documentId, userId: req.user.id }
+                });
+                
+                if (originalDocument) {
+                    await originalDocument.destroy();
+                    console.log(`Documento original ${documentId} eliminado después de firmar`);
+                }
+            } catch (error) {
+                console.error('Error eliminando documento original:', error);
+                // No fallar el proceso de firma si hay error al eliminar
+            }
+        }
         // 5. Guardar el PDF temporalmente para enviar al microservicio
         const tempPdfPath = req.file.path;
         const tempP12Path = path.join(__dirname, '../uploads/temp_sign', `temp_${Date.now()}.p12`);

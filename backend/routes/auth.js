@@ -91,7 +91,7 @@ router.post('/login', async (req, res) => {
                 return res.status(401).json({ error: 'Debes verificar tu correo antes de iniciar sesión.' });
             }
             const token = jwt.sign(
-                { id: user.id, email: user.email, iat: Math.floor(Date.now() / 1000), role: 'user' },
+                { id: user.id, email: user.email, nombre: user.nombre, iat: Math.floor(Date.now() / 1000), role: 'user' },
                 process.env.JWT_SECRET,
                 { expiresIn: process.env.JWT_EXPIRES_IN }
             );
@@ -110,7 +110,7 @@ router.post('/login', async (req, res) => {
         const admin = await Admin.findOne({ where: { email } });
         if (admin && await admin.validatePassword(password)) {
             const token = jwt.sign(
-                { id: admin.id, email: admin.email, iat: Math.floor(Date.now() / 1000), role: 'admin' },
+                { id: admin.id, email: admin.email, nombre: admin.nombre, iat: Math.floor(Date.now() / 1000), role: 'admin' },
                 process.env.JWT_SECRET,
                 { expiresIn: process.env.JWT_EXPIRES_IN }
             );
@@ -526,13 +526,76 @@ router.delete('/me', auth, async (req, res) => {
 // Obtener notificaciones del usuario autenticado
 router.get('/notifications', auth, async (req, res) => {
     try {
+        const { all } = req.query;
+        const whereClause = { userId: req.user.id };
+        
+        // Si no se especifica 'all', solo devolver no leídas
+        if (!all) {
+            whereClause.leido = false;
+        }
+        
         const notifications = await Notification.findAll({
-            where: { userId: req.user.id },
+            where: whereClause,
             order: [['createdAt', 'DESC']]
         });
         res.json(notifications);
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener notificaciones' });
+    }
+});
+
+// Marcar notificación como leída
+router.put('/notifications/:id/read', auth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findOne({
+            where: { id, userId: req.user.id }
+        });
+
+        if (!notification) {
+            return res.status(404).json({ error: 'Notificación no encontrada' });
+        }
+
+        notification.leido = true;
+        await notification.save();
+
+        res.json({ message: 'Notificación marcada como leída' });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al marcar notificación como leída' });
+    }
+});
+
+// Marcar todas las notificaciones como leídas
+router.put('/notifications/read-all', auth, async (req, res) => {
+    try {
+        await Notification.update(
+            { leido: true },
+            { where: { userId: req.user.id, leido: false } }
+        );
+
+        res.json({ message: 'Todas las notificaciones marcadas como leídas' });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al marcar notificaciones como leídas' });
+    }
+});
+
+// Eliminar notificación
+router.delete('/notifications/:id', auth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findOne({
+            where: { id, userId: req.user.id }
+        });
+
+        if (!notification) {
+            return res.status(404).json({ error: 'Notificación no encontrada' });
+        }
+
+        await notification.destroy();
+
+        res.json({ message: 'Notificación eliminada' });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al eliminar notificación' });
     }
 });
 

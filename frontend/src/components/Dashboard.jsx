@@ -58,15 +58,18 @@ import {
     VpnKey,
     Close,
     AddCard,
+    Send,
 } from '@mui/icons-material';
 import axios from '../config/axios';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import FileUpload from './FileUpload';
 import AddSignature from './AddSignature';
 import UserCertificate from './UserCertificate';
 import CustomModal from './CustomModal';
 import SignedDocuments from './SignedDocuments';
-import { io as socketIOClient } from 'socket.io-client';
+import SendForSignature from './SendForSignature';
+import SignatureRequests from './SignatureRequests';
 
 const DashboardContainer = styled(Box)(({ theme }) => ({
     minHeight: '100vh',
@@ -190,6 +193,7 @@ const Dashboard = () => {
     const [notifLoading, setNotifLoading] = useState(false);
     const [notifError, setNotifError] = useState('');
     const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
+    const [showAllNotifications, setShowAllNotifications] = useState(false);
 
     // Estados para el modal de error de descarga
     const [downloadErrorModal, setDownloadErrorModal] = useState(false);
@@ -212,7 +216,7 @@ const Dashboard = () => {
         setNotifLoading(true);
         setNotifError('');
         try {
-            const { data } = await axios.get('/auth/notifications');
+            const { data } = await axios.get('/auth/notifications?all=true');
             setNotifications(data);
         } catch (error) {
             setNotifError('Error al obtener notificaciones');
@@ -221,6 +225,48 @@ const Dashboard = () => {
         }
     };
 
+    // Marcar notificación como leída
+    const markNotificationAsRead = async (notificationId) => {
+        try {
+            await axios.put(`/auth/notifications/${notificationId}/read`);
+            setNotifications(prev => 
+                prev.map(notif => 
+                    notif.id === notificationId 
+                        ? { ...notif, leido: true }
+                        : notif
+                )
+            );
+        } catch (error) {
+            console.error('Error al marcar notificación como leída:', error);
+        }
+    };
+
+    // Marcar todas las notificaciones como leídas
+    const markAllNotificationsAsRead = async () => {
+        try {
+            await axios.put('/auth/notifications/read-all');
+            setNotifications(prev => 
+                prev.map(notif => ({ ...notif, leido: true }))
+            );
+        } catch (error) {
+            console.error('Error al marcar todas las notificaciones como leídas:', error);
+        }
+    };
+
+    // Eliminar notificación
+    const deleteNotification = async (notificationId) => {
+        try {
+            await axios.delete(`/auth/notifications/${notificationId}`);
+            setNotifications(prev => 
+                prev.filter(notif => notif.id !== notificationId)
+            );
+        } catch (error) {
+            console.error('Error al eliminar notificación:', error);
+        }
+    };
+
+    const { socket, on, isConnected } = useSocket();
+
     useEffect(() => {
         const timerId = setInterval(() => setCurrentTime(new Date()), 60000);
         
@@ -228,18 +274,15 @@ const Dashboard = () => {
         fetchSignatures();
         fetchNotifications();
 
-        // Socket.io conexión
-        const socket = socketIOClient('http://localhost:3001');
-        if (user?.id) {
-            socket.emit('register', user.id);
-        }
-        socket.on('nuevaNotificacion', (notif) => {
+        // Escuchar notificaciones en tiempo real
+        on('nuevaNotificacion', (notif) => {
             setNotifications((prev) => [notif, ...prev]);
         });
+
         return () => {
-            socket.disconnect();
+            clearInterval(timerId);
         };
-    }, [user?.id]);
+    }, [user?.id, on]);
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
@@ -584,25 +627,37 @@ const Dashboard = () => {
                         </Box>
 
                         <Grid container spacing={3} mb={5}>
-                            <Grid item xs={6} md={3}>
+                            <Grid item xs={6} md={2}>
                                 <ActionCard onClick={() => setActiveTab(1)}>
                                     <Draw sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>Añadir mi firma (P12)</Typography>
                                 </ActionCard>
                             </Grid>
-                            <Grid item xs={6} md={3}>
+                            <Grid item xs={6} md={2}>
                                 <ActionCard onClick={() => setActiveTab(2)}>
                                     <Article sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>Firmar Documentos</Typography>
                                 </ActionCard>
                             </Grid>
-                            <Grid item xs={6} md={3}>
+                            <Grid item xs={6} md={2}>
                                 <ActionCard onClick={() => setActiveTab(3)}>
                                     <Article sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>Documentos Firmados</Typography>
                                 </ActionCard>
                             </Grid>
-                            <Grid item xs={6} md={3}>
+                            <Grid item xs={6} md={2}>
+                                <ActionCard onClick={() => setActiveTab(4)}>
+                                    <Send sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
+                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>Enviar para Firma</Typography>
+                                </ActionCard>
+                            </Grid>
+                            <Grid item xs={6} md={2}>
+                                <ActionCard onClick={() => setActiveTab(5)}>
+                                    <Download sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
+                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>Solicitudes de Firma</Typography>
+                                </ActionCard>
+                            </Grid>
+                            <Grid item xs={6} md={2}>
                                 <ActionCard onClick={() => setCertModalOpen(true)}>
                                     <VerifiedUser sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>Solicitar Certificado Digital</Typography>
@@ -668,6 +723,18 @@ const Dashboard = () => {
                 return (
                     <Box sx={{ p: 3 }}>
                         <SignedDocuments />
+                    </Box>
+                );
+            case 4:
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <SendForSignature />
+                    </Box>
+                );
+            case 5:
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <SignatureRequests />
                     </Box>
                 );
             default:
@@ -747,6 +814,18 @@ const Dashboard = () => {
                     </ListItem>
                     <ListItem button onClick={() => { setActiveTab(4); setDrawerOpen(false); }}>
                         <ListItemIcon>
+                            <Send color="primary" />
+                        </ListItemIcon>
+                        <ListItemText primary="Enviar para Firma" />
+                    </ListItem>
+                    <ListItem button onClick={() => { setActiveTab(5); setDrawerOpen(false); }}>
+                        <ListItemIcon>
+                            <Download color="primary" />
+                        </ListItemIcon>
+                        <ListItemText primary="Solicitudes de Firma" />
+                    </ListItem>
+                    <ListItem button onClick={() => { setActiveTab(6); setDrawerOpen(false); }}>
+                        <ListItemIcon>
                             <Notifications color="primary" />
                         </ListItemIcon>
                         <ListItemText primary="Notificaciones" />
@@ -783,6 +862,8 @@ const Dashboard = () => {
                             <Tab label="Añadir mi Firma" />
                             <Tab label="Firmar Documento" />
                             <Tab label="Documentos Firmados" />
+                            <Tab label="Enviar para Firma" />
+                            <Tab label="Solicitudes de Firma" />
                         </StyledTabs>
                     </Box>
                     
@@ -898,9 +979,39 @@ const Dashboard = () => {
                         <Typography variant="h6" sx={{ fontWeight: 700 }}>
                             Notificaciones
                         </Typography>
-                        <IconButton onClick={() => setNotifDrawerOpen(false)}>
-                            <Close />
-                        </IconButton>
+                        <Box display="flex" alignItems="center" gap={0.5}>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                    if (notifications.some(n => !n.leido)) {
+                                        markAllNotificationsAsRead();
+                                    } else {
+                                        setShowAllNotifications(!showAllNotifications);
+                                    }
+                                }}
+                                sx={{ 
+                                    fontSize: '0.7rem',
+                                    minWidth: 'auto',
+                                    px: 1,
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                {notifications.some(n => !n.leido) 
+                                    ? 'Marcar leídas' 
+                                    : (showAllNotifications ? 'Solo no leídas' : 'Mostrar todas')
+                                }
+                            </Button>
+                            <Chip
+                                size="small"
+                                label={isConnected ? "Conectado" : "Desconectado"}
+                                color={isConnected ? "success" : "error"}
+                                variant="outlined"
+                            />
+                            <IconButton onClick={() => setNotifDrawerOpen(false)}>
+                                <Close />
+                            </IconButton>
+                        </Box>
                     </Box>
                     {notifLoading ? (
                         <CircularProgress />
@@ -909,13 +1020,25 @@ const Dashboard = () => {
                     ) : notifications.length === 0 ? (
                         <Typography color="text.secondary">No tienes notificaciones.</Typography>
                     ) : (
-                        <List>
-                            {notifications.map((notif) => (
+                        <>
+                            {!showAllNotifications && (
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                    Mostrando solo notificaciones no leídas
+                                </Typography>
+                            )}
+                            <List>
+                                {notifications
+                                    .filter(notif => showAllNotifications || !notif.leido)
+                                    .map((notif) => (
                                 <React.Fragment key={notif.id}>
                                     <ListItem
                                         alignItems="flex-start"
                                         sx={{ mb: 2, background: notif.leido ? 'transparent' : notif.tipo === 'aprobada' ? 'rgba(0, 212, 170, 0.13)' : 'rgba(255,0,0,0.07)', borderRadius: 2, position: 'relative' }}
-                                        onClick={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                                        onClick={() => {
+                                            if (!notif.leido) {
+                                                markNotificationAsRead(notif.id);
+                                            }
+                                        }}
                                     >
                                         <ListItemIcon>
                                             {notif.tipo === 'aprobada' ? <CheckCircle color="success" /> : <Warning color="error" />}
@@ -935,15 +1058,16 @@ const Dashboard = () => {
                                                 </>
                                             }
                                         />
-                                        {notif.tipo === 'rechazada' && (
-                                            <IconButton
-                                                size="small"
-                                                sx={{ position: 'absolute', top: 8, right: 8 }}
-                                                onClick={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
-                                            >
-                                                <Close fontSize="small" />
-                                            </IconButton>
-                                        )}
+                                        <IconButton
+                                            size="small"
+                                            sx={{ position: 'absolute', top: 8, right: 8 }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteNotification(notif.id);
+                                            }}
+                                        >
+                                            <Close fontSize="small" />
+                                        </IconButton>
                                         {notif.tipo === 'aprobada' && notif.link && (
                                             <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', mt: 1 }}>
                                                 <Button
@@ -971,6 +1095,7 @@ const Dashboard = () => {
                                 </React.Fragment>
                             ))}
                         </List>
+                        </>
                     )}
                 </Box>
             </Drawer>
