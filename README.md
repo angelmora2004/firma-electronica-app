@@ -1,24 +1,279 @@
-# Gestor de Firmas Electrónicas
+# 📋 Sistema de Gestión de Firmas Electrónicas
 
-Este proyecto es un sistema completo de gestión y firma electrónica de documentos PDF, desarrollado como parte de un proyecto de ciberseguridad. Permite a los usuarios gestionar certificados, firmar documentos digitalmente, visualizar y descargar documentos firmados, y almacenar todo de forma cifrada y segura.
+## 🎯 Descripción
 
-## Características principales
+**Sistema completo de gestión de firmas electrónicas** con infraestructura PKI propia, notificaciones en tiempo real y capacidades de firma digital avanzadas. Diseñado para entornos empresariales que requieren autenticación segura y gestión documental con validez legal.
 
-- **Autenticación segura con JWT**
-- **Gestión de usuarios (CRUD)**
-- **Gestión de certificados digitales (.p12) y CA propia**
-- **Subida y firma digital de documentos PDF**
-- **Estampa visual personalizable (QR + datos del certificado) en el PDF**
-- **Selección visual de la posición de la estampa en el frontend**
-- **Microservicio PyHanko para firma digital válida**
-- **Almacenamiento cifrado de documentos firmados en la base de datos (AES-GCM, clave única por documento, clave maestra en .env)**
-- **Descarga y eliminación segura de documentos firmados**
-- **Frontend moderno con React y Material-UI**
+### 🌟 Características Principales
 
-## Requisitos
+- 🔐 **Autenticación JWT** con verificación de email
+- 📜 **Autoridad Certificadora (CA) propia** con OpenSSL
+- ✍️ **Firmas digitales** con PyHanko + certificados X.509
+- 📨 **Solicitudes de firma** entre usuarios
+- 🔔 **Notificaciones en tiempo real** con Socket.IO
+- 📄 **Gestión completa de documentos** PDF
+- 👑 **Panel de administración** para gestión del sistema
+- 🛡️ **Cifrado end-to-end** de archivos sensibles
 
-- Node.js (v14 o superior)
-- Python 3.8+ (para el microservicio PyHanko)
+## 🚀 Instalación Rápida
+
+### Prerrequisitos
+```bash
+node --version    # v18+
+python --version  # 3.8+
+mysql --version   # 8.0+
+```
+
+### Configuración
+```bash
+# Clonar y configurar backend
+git clone <repository-url> && cd firmaelectronica/backend
+npm install && npm run init-db && npm run init-certificates
+
+# Configurar frontend
+cd ../frontend && npm install
+echo "VITE_API_URL=https://firmaelectronica.local:3001/api" > .env.local
+
+# Configurar PyHanko
+cd ../backend/pyhanko-signservice
+python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt
+```
+
+### Ejecutar
+```bash
+# 3 terminales:
+cd backend && npm start
+cd frontend && npm run dev  
+cd backend/pyhanko-signservice && python app.py
+```
+
+## 🏗️ Arquitectura
+
+### Stack Tecnológico
+- **Backend**: Node.js + Express + MySQL + Socket.IO
+- **Frontend**: React 19 + Vite + Material-UI + PDF.js
+- **Firma Digital**: Python Flask + PyHanko
+- **Seguridad**: JWT + OpenSSL + AES-256
+
+## 📊 Casos de Uso
+
+```mermaid
+graph TD
+    A[Usuario Registrado] --> B[Iniciar Sesión]
+    B --> C[Dashboard]
+    
+    C --> D[Gestión de Firmas]
+    D --> D1[Subir Firma Digital]
+    D --> D2[Gestionar Firmas Existentes]
+    D --> D3[Descargar Firma]
+    
+    C --> E[Solicitudes de Firma]
+    E --> E1[Enviar Documento para Firma]
+    E --> E2[Recibir Solicitudes]
+    E --> E3[Firmar Documento]
+    E --> E4[Rechazar Solicitud]
+    
+    C --> F[Gestión de Documentos]
+    F --> F1[Documentos Firmados]
+    F --> F2[Documentos Sin Firmar]
+    F --> F3[Descargar/Eliminar]
+    
+    C --> G[Certificados Digitales]
+    G --> G1[Solicitar Certificado]
+    G --> G2[Gestionar Certificados]
+    
+    C --> H[Notificaciones]
+    H --> H1[Notificaciones en Tiempo Real]
+    H --> H2[Historial de Notificaciones]
+    
+    Admin[Administrador] --> AdminDash[Panel de Administración]
+    AdminDash --> A1[Gestión de Usuarios]
+    AdminDash --> A2[Gestión de Certificados]
+    AdminDash --> A3[Monitoreo del Sistema]
+    AdminDash --> A4[Gestión de CA]
+```
+
+## � Funcionalidades Principales
+
+### � Autenticación y Seguridad
+- **JWT tokens** con verificación de email obligatoria
+- **HTTPS** con certificados SSL autofirmados
+- **Cifrado AES-256** para documentos sensibles
+- **Headers de seguridad** con Helmet.js
+- **Autoridad Certificadora propia** para PKI
+
+### ✍️ Sistema de Firmas
+1. **Firma Simple**: Imagen de firma aplicada visualmente
+2. **Firma Digital**: Certificado X.509 con PyHanko
+3. **Firma Completa**: Visual + Digital + QR de verificación
+
+### 📨 Solicitudes de Firma
+- **Envío entre usuarios** con notificaciones en tiempo real
+- **Visualización integrada** de PDFs
+- **Aprobación/Rechazo** con trazabilidad completa
+- **Historial** de todas las solicitudes
+
+### 🔔 Notificaciones en Tiempo Real
+```javascript
+// Eventos WebSocket disponibles
+socket.on('notification', data => {})      // Generales
+socket.on('signatureRequest', data => {}) // Solicitudes  
+socket.on('documentSigned', data => {})   // Firmados
+socket.on('certificateApproved', data => {}) // Certificados
+```
+
+## 📡 API Reference
+
+### Endpoints Principales
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| `POST` | `/api/auth/register` | Registro de usuario |
+| `POST` | `/api/auth/login` | Inicio de sesión |
+| `POST` | `/api/signatures/sign-document` | Firmar documento |
+| `POST` | `/api/signature-requests/send` | Enviar solicitud |
+| `POST` | `/api/ca/export-p12` | Exportar certificado |
+
+### Configuración Variables (.env)
+```env
+# Base de datos
+DB_HOST=localhost
+DB_NAME=firma_electronica  
+DB_USER=tu_usuario
+DB_PASSWORD=tu_password
+
+# Seguridad
+JWT_SECRET=clave_jwt_64_caracteres
+SIGNED_DOC_MASTER_KEY=clave_cifrado_32_chars
+
+# Servicios  
+FRONTEND_URL=https://firmaelectronica.local:5173
+PYHANKO_URL=http://127.0.0.1:5001
+```
+
+## 📁 Estructura del Proyecto
+
+```
+firmaelectronica/
+├── backend/                    # Node.js API Server
+│   ├── certificates/          # PKI Infrastructure  
+│   ├── controllers/           # Business Logic
+│   ├── models/               # Database Models
+│   ├── routes/               # API Routes
+│   ├── pyhanko-signservice/  # Python Microservice
+│   └── server.js             # Main Server
+├── frontend/                  # React Application
+│   ├── src/components/       # UI Components
+│   ├── src/contexts/         # Context API
+│   └── src/config/           # Configuration
+└── dns-config/               # Local DNS Setup
+```
+
+## 🧪 Scripts de Desarrollo
+
+### Backend
+```bash
+npm start                 # Servidor producción
+npm run dev              # Desarrollo con nodemon
+npm run init-db          # Inicializar BD
+npm run init-certificates # Configurar PKI
+```
+
+### Frontend  
+```bash
+npm run dev              # Servidor desarrollo
+npm run build            # Build producción
+npm run preview          # Preview build
+```
+
+## 🚀 Deployment
+
+### Docker Compose
+```yaml
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    ports: ["3001:3001"]
+    environment:
+      - NODE_ENV=production
+  frontend:
+    build: ./frontend
+    ports: ["5173:5173"]
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: firma_electronica
+```
+
+### Variables de Producción
+```bash
+export NODE_ENV=production
+export DB_HOST=tu_servidor_mysql
+export JWT_SECRET=clave_super_segura_64_chars
+```
+
+## 🛡️ Seguridad Implementada
+
+| Componente | Medida de Seguridad |
+|------------|-------------------|
+| **Autenticación** | JWT + bcrypt + email verification |
+| **Comunicación** | HTTPS + CORS + Security Headers |
+| **Almacenamiento** | AES-256 encryption + unique keys |
+| **PKI** | Self-signed CA + X.509 certificates |
+| **Validación** | Input sanitization + SQL injection prevention |
+
+## 📈 Monitoreo
+
+### Logs del Sistema
+- `/logs/auth.log` - Autenticación
+- `/logs/signatures.log` - Firmas digitales
+- `/logs/certificates.log` - Gestión PKI
+- `/logs/error.log` - Errores del sistema
+
+### Mantenimiento Automático
+- **Limpieza de temporales**: Cada hora
+- **Documentos expirados**: Diario 2 AM
+- **Rotación de logs**: Semanal
+
+## 🤝 Contribución
+
+```bash
+# Flujo de desarrollo
+git checkout -b feature/nueva-funcionalidad
+git commit -m "feat: agregar nueva funcionalidad"  
+git push origin feature/nueva-funcionalidad
+# Crear Pull Request
+```
+
+## 📞 Soporte
+
+### Problemas Comunes
+```bash
+# Error certificados
+npm run init-certificates
+
+# Error base de datos
+npm run init-db
+
+# Puerto ocupado (Windows)
+netstat -ano | findstr :3001
+taskkill /PID <PID> /F
+```
+
+### Documentación
+- **[Documentación Completa](./README_COMPLETO.md)** - Análisis detallado
+- **[Configuración SSL](./certificates/)** - Setup PKI
+- **[API Docs](./docs/)** - Reference completa
+
+## 📄 Licencia
+
+**MIT License** - Ver [LICENSE](./LICENSE) para detalles.
+
+---
+
+**🔗 Enlaces**: [Docs Completas](./README_COMPLETO.md) | [API](./docs/API.md) | [Troubleshooting](./docs/TROUBLESHOOTING.md)
+
+**📊 Versión**: 2.0 | **📅 Actualización**: Agosto 2025
 - MySQL
 - npm o yarn
 
