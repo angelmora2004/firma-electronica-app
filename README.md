@@ -185,26 +185,6 @@ npm run build            # Build producción
 npm run preview          # Preview build
 ```
 
-## 🚀 Deployment
-
-### Docker Compose
-```yaml
-version: '3.8'
-services:
-  backend:
-    build: ./backend
-    ports: ["3001:3001"]
-    environment:
-      - NODE_ENV=production
-  frontend:
-    build: ./frontend
-    ports: ["5173:5173"]
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: firma_electronica
-```
-
 ### Variables de Producción
 ```bash
 export NODE_ENV=production
@@ -244,38 +224,6 @@ git commit -m "feat: agregar nueva funcionalidad"
 git push origin feature/nueva-funcionalidad
 # Crear Pull Request
 ```
-
-## 📞 Soporte
-
-### Problemas Comunes
-```bash
-# Error certificados
-npm run init-certificates
-
-# Error base de datos
-npm run init-db
-
-# Puerto ocupado (Windows)
-netstat -ano | findstr :3001
-taskkill /PID <PID> /F
-```
-
-### Documentación
-- **[Documentación Completa](./README_COMPLETO.md)** - Análisis detallado
-- **[Configuración SSL](./certificates/)** - Setup PKI
-- **[API Docs](./docs/)** - Reference completa
-
-## 📄 Licencia
-
-**MIT License** - Ver [LICENSE](./LICENSE) para detalles.
-
----
-
-**🔗 Enlaces**: [Docs Completas](./README_COMPLETO.md) | [API](./docs/API.md) | [Troubleshooting](./docs/TROUBLESHOOTING.md)
-
-**📊 Versión**: 2.0 | **📅 Actualización**: Agosto 2025
-- MySQL
-- npm o yarn
 
 ## Configuración
 
