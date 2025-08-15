@@ -9,7 +9,14 @@ const instance = axios.create({
     timeout: 30000, // Aumentar timeout a 30 segundos para procesamiento de PDFs
     headers: {
         'Content-Type': 'application/json'
-    }
+    },
+    withCredentials: true,
+    // Configuración para certificados autofirmados en desarrollo
+    httpsAgent: import.meta.env.DEV ? {
+        rejectUnauthorized: false,
+        requestCert: false,
+        agent: false
+    } : undefined
 });
 
 // El interceptor se manejará desde el AuthContext

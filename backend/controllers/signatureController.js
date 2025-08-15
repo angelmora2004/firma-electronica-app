@@ -261,15 +261,66 @@ exports.signDocument = [upload.single('pdf'), async (req, res) => {
         form.append('p12', await fs.readFile(tempP12Path), { filename: 'cert.p12' });
         form.append('password', password);
         // Puedes agregar más campos si el microservicio los requiere
-        const pyhankoUrl = process.env.PYHANKO_URL;
-        if (!pyhankoUrl) throw new Error('No está definida la variable de entorno PYHANKO_URL');
-        const response = await axios.post(`${pyhankoUrl}/sign-pdf`, form, {
-            headers: form.getHeaders(),
-            responseType: 'arraybuffer'
-        });
-        await fs.unlink(tempPdfPath);
-        await fs.unlink(tempP12Path);
-        const signedPdfBuffer = Buffer.from(response.data);
+        const pyhankoUrl = process.env.PYHANKO_URL || 'https://localhost:5001';
+        console.log('🔍 URL del microservicio:', pyhankoUrl);
+        console.log('🔍 Enviando petición a:', `${pyhankoUrl}/sign-pdf`);
+        
+        // Configuración para certificados SSL usando el CA correcto
+        const https = require('https');
+        
+        // Ruta al certificado CA para verificar TLS del microservicio
+        // Intentar primero con el CA de certificados TLS, luego con el CA de firmas
+        const fsSync = require('fs');
+        let caCertPath = path.join(__dirname, '..', 'certificates', 'certs', 'ca.cert.pem');
+        if (!fsSync.existsSync(caCertPath)) {
+            // Si no existe, usar el CA de firmas como fallback
+            caCertPath = path.join(__dirname, '..', 'uploads', 'ca', 'ca.pem');
+        }
+        
+        let httpsAgent;
+        try {
+            if (fsSync.existsSync(caCertPath)) {
+                // Si existe el certificado CA, usarlo para verificar
+                const caCert = fsSync.readFileSync(caCertPath);
+                httpsAgent = new https.Agent({
+                    ca: caCert,
+                    rejectUnauthorized: true
+                });
+                console.log('🔒 Usando certificado CA para verificación SSL');
+            } else {
+                // Si no existe, usar configuración para certificados autofirmados
+                httpsAgent = new https.Agent({
+                    rejectUnauthorized: false
+                });
+                console.log('⚠️  Certificado CA no encontrado, usando verificación SSL relajada');
+            }
+        } catch (error) {
+            console.log('⚠️  Error leyendo certificado CA, usando verificación SSL relajada:', error.message);
+            httpsAgent = new https.Agent({
+                rejectUnauthorized: false
+            });
+        }
+        
+        let signedPdfBuffer;
+        try {
+            const response = await axios.post(`${pyhankoUrl}/sign-pdf`, form, {
+                headers: form.getHeaders(),
+                responseType: 'arraybuffer',
+                validateStatus: function (status) {
+                    return status < 500; // Resolve only if the status code is less than 500
+                },
+                httpsAgent: httpsAgent
+            });
+            console.log('✅ Respuesta del microservicio recibida, status:', response.status);
+            await fs.unlink(tempPdfPath);
+            await fs.unlink(tempP12Path);
+            signedPdfBuffer = Buffer.from(response.data);
+        } catch (error) {
+            console.error('❌ Error en comunicación con microservicio:', error.message);
+            console.error('❌ Status:', error.response?.status);
+            console.error('❌ Data:', error.response?.data);
+            throw new Error(`Error en microservicio: ${error.message}`);
+        }
 
         // --- Guardar documento firmado en la base de datos encriptado ---
         const crypto = require('crypto');

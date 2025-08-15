@@ -5,8 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "init-db": "node config/init-db.js"
+    "dev": "nodemon --use-system-ca server.js",
+    "init-db": "node config/init-db.js",
+    "init-certificates": "node scripts/init-certificates.js",
+    "setup-tls": "npm run init-certificates",
+    "setup-https": "node scripts/setup-https.js"
   },
   "keywords": [],
   "author": "",

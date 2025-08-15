@@ -69,7 +69,7 @@ cd frontend
 
 2. Crear archivo `.env` en el directorio actual con las siguientes variables:
 ```
-VITE_API_URL=http://localhost:3001/api
+VITE_API_URL=http://localhost:3443/api
 ```
 
 3. Instalar dependencias:

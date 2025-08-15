@@ -178,11 +178,18 @@ router.post('/register', async (req, res) => {
             }
         });
 
-        // Enlace de verificación (solo usa la variable de entorno, no valores por defecto)
-        if (!process.env.APP_BASE_URL) {
-            throw new Error('La variable de entorno APP_BASE_URL no está definida');
+        // Enlace de verificación (usa HTTP en desarrollo, HTTPS en producción)
+        let baseUrl;
+        if (process.env.NODE_ENV === 'production') {
+            if (!process.env.APP_BASE_URL) {
+                throw new Error('La variable de entorno APP_BASE_URL no está definida');
+            }
+            baseUrl = process.env.APP_BASE_URL;
+        } else {
+            // En desarrollo, usar HTTP en el puerto 3443
+            baseUrl = 'https://localhost:3443';
         }
-        const verificationUrl = `${process.env.APP_BASE_URL}/api/auth/verify-email?token=${verificationToken}`;
+        const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
 
         // Enviar el correo
         const html = `
@@ -292,10 +299,18 @@ router.post('/resend-verification', async (req, res) => {
                 pass: process.env.SMTP_PASS
             }
         });
-        if (!process.env.APP_BASE_URL) {
-            throw new Error('La variable de entorno APP_BASE_URL no está definida');
+        // Enlace de verificación (usa HTTP en desarrollo, HTTPS en producción)
+        let baseUrl;
+        if (process.env.NODE_ENV === 'production') {
+            if (!process.env.APP_BASE_URL) {
+                throw new Error('La variable de entorno APP_BASE_URL no está definida');
+            }
+            baseUrl = process.env.APP_BASE_URL;
+        } else {
+            // En desarrollo, usar HTTP en el puerto 3443
+            baseUrl = 'https://localhost:3443';
         }
-        const verificationUrl = `${process.env.APP_BASE_URL}/api/auth/verify-email?token=${verificationToken}`;
+        const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
         const html = `
           <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px 24px 24px 24px;box-shadow:0 4px 24px rgba(0,0,0,0.08);font-family:'Segoe UI',Arial,sans-serif;">
             <div style="text-align:center;">

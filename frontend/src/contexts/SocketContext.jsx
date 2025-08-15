@@ -21,13 +21,16 @@ export const SocketProvider = ({ children }) => {
         if (!user?.id) return;
 
         // Crear conexión Socket.io
-        const newSocket = io('http://localhost:3001', {
+        const socketUrl = import.meta.env.VITE_WS_URL || 'http://localhost:3001';
+        const newSocket = io(socketUrl, {
             transports: ['websocket', 'polling'],
             autoConnect: true,
             reconnection: true,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
-            reconnectionAttempts: 5
+            reconnectionAttempts: 5,
+            // Configuración para certificados autofirmados en desarrollo
+            rejectUnauthorized: import.meta.env.DEV ? false : true
         });
 
         // Eventos de conexión

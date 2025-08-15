@@ -397,10 +397,38 @@ exports.signDocument = [upload.single('pdf'), async (req, res) => {
         form.append('p12', fs.createReadStream(tempP12Path), { filename: 'cert.p12' });
         form.append('password', password);
 
-        const pyhankoUrl = process.env.PYHANKO_URL || 'http://localhost:5001'; // Usar PyHanko
+        const pyhankoUrl = process.env.PYHANKO_URL || 'https://localhost:5001'; // Usar PyHanko con HTTPS
+        
+        // Configuración para certificados SSL autofirmados
+        const https = require('https');
+        
+        // Ruta al certificado CA para verificar TLS del microservicio
+        // Intentar primero con el CA de certificados TLS, luego con el CA de firmas
+        let caCertPath = path.join(__dirname, '..', 'certificates', 'certs', 'ca.cert.pem');
+        if (!fs.existsSync(caCertPath)) {
+            // Si no existe, usar el CA de firmas como fallback
+            caCertPath = path.join(__dirname, '..', 'uploads', 'ca', 'ca.pem');
+        }
+        
+        let httpsAgent;
+        if (fs.existsSync(caCertPath)) {
+            // Si existe el certificado CA, usarlo para verificar
+            const caCert = fs.readFileSync(caCertPath);
+            httpsAgent = new https.Agent({
+                ca: caCert,
+                rejectUnauthorized: true
+            });
+        } else {
+            // Si no existe, usar configuración para certificados autofirmados
+            httpsAgent = new https.Agent({
+                rejectUnauthorized: false
+            });
+        }
+        
         const response = await axios.post(`${pyhankoUrl}/sign-pdf`, form, {
             headers: form.getHeaders(),
-            responseType: 'arraybuffer'
+            responseType: 'arraybuffer',
+            httpsAgent: httpsAgent
         });
 
         // Limpiar archivos temporales

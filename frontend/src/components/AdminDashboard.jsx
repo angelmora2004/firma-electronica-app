@@ -32,9 +32,11 @@ const AdminDashboard = () => {
         setError('');
         try {
             const { data } = await axios.get('/ca/admin/certificate-requests');
+            console.log('Solicitudes obtenidas:', data);
             setSolicitudes(data);
         } catch (err) {
-            setError('Error al obtener solicitudes');
+            console.error('Error al obtener solicitudes:', err);
+            setError('Error al obtener solicitudes: ' + (err.response?.data?.error || err.message));
         } finally {
             setLoading(false);
         }

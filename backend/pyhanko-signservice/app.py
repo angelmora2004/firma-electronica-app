@@ -124,4 +124,20 @@ def sign_pdf():
         return jsonify({'error': f'Error al firmar el documento: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001) 
+    import os
+    import ssl
+    
+    # Configuración para HTTPS
+    cert_path = os.path.join(os.path.dirname(__file__), '..', 'certificates', 'server', 'server.cert.pem')
+    key_path = os.path.join(os.path.dirname(__file__), '..', 'certificates', 'server', 'server.key.pem')
+    
+    # Verificar si existen los certificados
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert_path, key_path)
+        
+        print("🔒 Microservicio ejecutándose en HTTPS (puerto 5001)")
+        app.run(host='0.0.0.0', port=5001, ssl_context=context)
+    else:
+        print("⚠️  Certificados no encontrados. Ejecutando en HTTP (puerto 5001)")
+        app.run(host='0.0.0.0', port=5001) 
